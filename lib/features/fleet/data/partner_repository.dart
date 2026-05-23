@@ -153,6 +153,50 @@ class PartnerRepository {
       return null;
     }
   }
+
+  /// Fetch all active partners for display
+  Future<List<Partner>> fetchPartners() async {
+    try {
+      final response = await _supabase
+          .from('partners')
+          .select()
+          .order('created_at', ascending: false);
+      final list = response as List;
+      return list.map((json) => Partner.fromJson(json)).toList();
+    } catch (_) {
+      // Mock data fallback
+      return [
+        Partner(
+          id: 'mock-p1',
+          companyName: 'Prishtina Rent Express',
+          contactName: 'Arben Krasniqi',
+          email: 'arben@printexpress.com',
+          phone: '+38344111222',
+          status: 'Active',
+        ),
+      ];
+    }
+  }
+
+  /// Update partner status (e.g. suspend)
+  Future<void> updatePartnerStatus(String id, String status) async {
+    try {
+      await _supabase.from('partners').update({'status': status}).eq('id', id);
+    } catch (e) {
+      if (e.toString().contains('placeholder')) return;
+      rethrow;
+    }
+  }
+
+  /// Delete a partner profile
+  Future<void> deletePartner(String id) async {
+    try {
+      await _supabase.from('partners').delete().eq('id', id);
+    } catch (e) {
+      if (e.toString().contains('placeholder')) return;
+      rethrow;
+    }
+  }
 }
 
 @riverpod
@@ -166,7 +210,13 @@ Future<List<PartnerApplication>> partnerApplicationsList(PartnerApplicationsList
   return ref.watch(partnerRepositoryProvider).fetchApplications();
 }
 
+@riverpod
+Future<List<Partner>> partnersList(PartnersListRef ref) {
+  return ref.watch(partnerRepositoryProvider).fetchPartners();
+}
+
 // Global authentication states for SpaceRent Ecosystem
 final currentPartnerProvider = StateProvider<Partner?>((ref) => null);
 final isAdminProvider = StateProvider<bool>((ref) => false);
+
 

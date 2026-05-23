@@ -63,7 +63,15 @@ GoRouter router(RouterRef ref) {
         name: 'car_details',
         builder: (context, state) {
           final carId = state.pathParameters['id'] ?? '';
-          return CarDetailsScreen(carId: carId);
+          final startStr = state.uri.queryParameters['start'];
+          final endStr = state.uri.queryParameters['end'];
+          final startDate = startStr != null ? DateTime.tryParse(startStr) : null;
+          final endDate = endStr != null ? DateTime.tryParse(endStr) : null;
+          return CarDetailsScreen(
+            carId: carId,
+            startDate: startDate,
+            endDate: endDate,
+          );
         },
       ),
 

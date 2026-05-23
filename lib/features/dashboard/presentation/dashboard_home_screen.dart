@@ -1,244 +1,1169 @@
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import '../../bookings/data/admin_booking_repository.dart';
-import '../../bookings/domain/booking.dart';
-import '../../search/data/vehicle_repository.dart';
+import 'package:intl/intl.dart';
+import 'package:uuid/uuid.dart';
 
-class DashboardHomeScreen extends ConsumerWidget {
+import '../../bookings/data/admin_booking_repository.dart';
+import '../../bookings/data/booking_repository.dart';
+import '../../bookings/domain/booking.dart';
+import '../../fleet/data/partner_repository.dart';
+import '../../fleet/data/profile_repository.dart';
+import '../../fleet/domain/partner.dart';
+import '../../fleet/domain/profile.dart';
+import '../../fleet/presentation/widgets/add_car_dialog.dart';
+import '../../search/data/vehicle_repository.dart';
+import '../../search/domain/location.dart';
+import '../../search/domain/vehicle.dart';
+
+class DashboardHomeScreen extends HookConsumerWidget {
   const DashboardHomeScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // 1. Listeners and states
+    final partner = ref.watch(currentPartnerProvider);
+    final isUserAdmin = partner == null; // If no partner is logged in, we must be Admin (passcode bypass)
+
     final liveBookingsAsync = ref.watch(liveBookingsListProvider);
     final vehiclesAsync = ref.watch(vehiclesListProvider());
+    final locationsAsync = ref.watch(locationsProvider);
+    final partnersAsync = ref.watch(partnersListProvider);
+    final applicationsAsync = ref.watch(partnerApplicationsListProvider);
+    final profilesAsync = ref.watch(profilesListProvider);
+
+    // 2. Mock Support Requests
+    final supportRequests = useState<List<Map<String, String>>>([
+      {
+        'id': 't1',
+        'partner': 'Dardanian Cars',
+        'subject': 'GPS Sync Error on Golf 8',
+        'status': 'Open',
+        'date': '23 May 2026'
+      },
+      {
+        'id': 't2',
+        'partner': 'Pristina Rent Express',
+        'subject': 'Payout Account Update',
+        'status': 'Resolved',
+        'date': '22 May 2026'
+      },
+    ]);
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F0F1A),
       body: CustomScrollView(
         slivers: [
           // Header Section
-          const SliverPadding(
-            padding: EdgeInsets.all(24.0),
+          SliverPadding(
+            padding: const EdgeInsets.all(24.0),
             sliver: SliverToBoxAdapter(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'Operational Control Center',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      fontFamily: 'Outfit',
-                    ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'SpaceRent',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF00CEC9),
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        isUserAdmin ? 'KOSOVO MISSION CONTROL' : 'PARTNER OPERATIONS DASHBOARD',
+                        style: const TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          fontFamily: 'Outfit',
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        isUserAdmin
+                            ? 'Realtime administrator overview across Kosovo hubs'
+                            : 'Manage fleet and bookings for ${partner.companyName}',
+                        style: const TextStyle(color: Colors.white54, fontSize: 13),
+                      ),
+                    ],
                   ),
-                  SizedBox(height: 4),
-                  Text(
-                    'Live overview of SpaceRent operations across Kosovo hubs',
-                    style: TextStyle(color: Colors.white54, fontSize: 13),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF6C5CE7),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () {
+                      showDialog(
+                        context: context,
+                        builder: (context) => const AddCarDialog(),
+                      );
+                    },
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('Add Vehicle', style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
             ),
           ),
 
-          // Stream-based metrics computation
-          liveBookingsAsync.when(
-            data: (bookings) {
-              final totalVehicles = vehiclesAsync.maybeWhen(
-                data: (v) => v.length,
-                orElse: () => 12, // fallback
-              );
-
-              // 1. Active Rentals
-              final activeRentals = bookings.where((b) => b.status == 'Confirmed').length;
-
-              // 2. Vehicles Out (utilization rate)
-              final vehiclesOut = activeRentals;
-
-              // 3. Today's Revenue
-              final todayRevenue = bookings
-                  .where((b) => b.status == 'Confirmed')
-                  .fold<double>(0, (sum, b) => sum + b.totalPrice);
-
-              // 4. Pending PRN Pickups
-              final pendingPrn = bookings.where((b) {
-                // If it's confirmed and starting today (mock/approximate date filter)
-                return b.status == 'Confirmed';
-              }).length;
-
-              return SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                sliver: SliverGrid(
-                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 320,
-                    mainAxisSpacing: 20,
-                    crossAxisSpacing: 20,
-                    childAspectRatio: 1.8,
-                  ),
-                  delegate: SliverChildListDelegate([
-                    _StatCard(
-                      title: 'ACTIVE RENTALS',
-                      value: '$activeRentals',
-                      icon: Icons.vpn_key_outlined,
-                      color: const Color(0xFF6C5CE7),
-                    ),
-                    _StatCard(
-                      title: 'VEHICLES OUT',
-                      value: '$vehiclesOut / $totalVehicles',
-                      icon: Icons.directions_car_outlined,
-                      color: const Color(0xFF00CEC9),
-                    ),
-                    _StatCard(
-                      title: 'TOTAL ECOSYSTEM REVENUE',
-                      value: '€${todayRevenue.toStringAsFixed(0)}',
-                      icon: Icons.euro_symbol,
-                      color: Colors.green,
-                    ),
-                    _StatCard(
-                      title: 'PENDING HUB CONFIRMATIONS',
-                      value: '$pendingPrn',
-                      icon: Icons.flight_land,
-                      color: Colors.amber,
-                    ),
-                  ]),
-                ),
-              );
-            },
-            loading: () => const SliverFillRemaining(
-              child: Center(child: CircularProgressIndicator(color: Color(0xFF6C5CE7))),
-            ),
-            error: (err, _) => SliverFillRemaining(
-              child: Center(child: Text('Error loading operations metrics: $err')),
+          // Statistics Grid
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+            sliver: SliverToBoxAdapter(
+              child: _buildStatsGrid(
+                isUserAdmin: isUserAdmin,
+                partner: partner,
+                bookingsAsync: liveBookingsAsync,
+                vehiclesAsync: vehiclesAsync,
+                partnersAsync: partnersAsync,
+                applicationsAsync: applicationsAsync,
+              ),
             ),
           ),
 
-          // Live Revenue Graph Section
+          // Main Dashboard Sections split
           SliverPadding(
             padding: const EdgeInsets.all(24.0),
-            sliver: SliverToBoxAdapter(
-              child: Container(
-                height: 360,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1A1A2E),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.white.withOpacity(0.08)),
-                ),
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Revenue Analytics (Last 7 Days)',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        fontFamily: 'Outfit',
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Expanded(
-                      child: LineChart(
-                        LineChartData(
-                          gridData: const FlGridData(show: false),
-                          titlesData: FlTitlesData(
-                            leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                            bottomTitles: AxisTitles(
-                              sideTitles: SideTitles(
-                                showTitles: true,
-                                getTitlesWidget: (val, meta) {
-                                  final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-                                  final index = val.toInt() % days.length;
-                                  return Padding(
-                                    padding: const EdgeInsets.only(top: 8.0),
-                                    child: Text(
-                                      days[index],
-                                      style: const TextStyle(color: Colors.white54, fontSize: 11),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          ),
-                          borderData: FlBorderData(show: false),
-                          lineBarsData: [
-                            LineChartBarData(
-                              spots: const [
-                                FlSpot(0, 180),
-                                FlSpot(1, 240),
-                                FlSpot(2, 210),
-                                FlSpot(3, 390),
-                                FlSpot(4, 320),
-                                FlSpot(5, 540),
-                                FlSpot(6, 680),
-                              ],
-                              isCurved: true,
-                              color: const Color(0xFF00CEC9), // Neo Teal
-                              barWidth: 4,
-                              isStrokeCapRound: true,
-                              dotData: const FlDotData(show: true),
-                              belowBarData: BarAreaData(
-                                show: true,
-                                color: const Color(0xFF00CEC9).withOpacity(0.15),
-                              ),
-                            ),
-                            LineChartBarData(
-                              spots: const [
-                                FlSpot(0, 120),
-                                FlSpot(1, 190),
-                                FlSpot(2, 290),
-                                FlSpot(3, 260),
-                                FlSpot(4, 450),
-                                FlSpot(5, 490),
-                                FlSpot(6, 590),
-                              ],
-                              isCurved: true,
-                              color: const Color(0xFF6C5CE7), // Space Violet
-                              barWidth: 4,
-                              isStrokeCapRound: true,
-                              dotData: const FlDotData(show: false),
-                              belowBarData: BarAreaData(
-                                show: true,
-                                color: const Color(0xFF6C5CE7).withOpacity(0.08),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            sliver: SliverList(
+              delegate: SliverChildListDelegate([
+                if (isUserAdmin) ...[
+                  // 1. Partner Onboarding Applications (Comm-Links)
+                  _buildApplicationsSection(context, ref, applicationsAsync),
+                  const SizedBox(height: 24),
+
+                  // 2. Active Partners list
+                  _buildActivePartnersSection(context, ref, partnersAsync),
+                  const SizedBox(height: 24),
+
+                  // 3. Support Requests
+                  _buildSupportRequestsSection(context, supportRequests),
+                  const SizedBox(height: 24),
+
+                  // 4. Locations Hubs Management
+                  _buildLocationsSection(context, ref, locationsAsync),
+                  const SizedBox(height: 24),
+
+                  // 5. User Roles Management
+                  _buildUserRolesSection(context, ref, profilesAsync),
+                  const SizedBox(height: 24),
+                ],
+
+                // 6. Fleet Management (CRUD)
+                _buildFleetSection(context, ref, vehiclesAsync, locationsAsync, partner),
+                const SizedBox(height: 24),
+
+                // 7. Recent Bookings for my vehicles (CRUD)
+                _buildRecentBookingsSection(context, ref, liveBookingsAsync, vehiclesAsync, partner),
+                const SizedBox(height: 48),
+              ]),
             ),
           ),
         ],
       ),
     );
   }
+
+  // --- 1. Statistics Grid UI Builder ---
+  Widget _buildStatsGrid({
+    required bool isUserAdmin,
+    required Partner? partner,
+    required AsyncValue<List<Booking>> bookingsAsync,
+    required AsyncValue<List<Vehicle>> vehiclesAsync,
+    required AsyncValue<List<Partner>> partnersAsync,
+    required AsyncValue<List<PartnerApplication>> applicationsAsync,
+  }) {
+    final bookings = bookingsAsync.value ?? [];
+    final vehicles = vehiclesAsync.value ?? [];
+    final partners = partnersAsync.value ?? [];
+    final applications = applicationsAsync.value ?? [];
+
+    // Filter metrics if partner logged in
+    final displayVehicles = isUserAdmin ? vehicles : vehicles.where((v) => v.partnerId == partner?.id).toList();
+    final displayVehiclesIds = displayVehicles.map((v) => v.id).toSet();
+    final displayBookings = isUserAdmin ? bookings : bookings.where((b) => displayVehiclesIds.contains(b.vehicleId)).toList();
+
+    final totalBookings = displayBookings.length;
+    final totalFleet = displayVehicles.length;
+
+    final pendingPartners = isUserAdmin ? applications.where((a) => a.status == 'Pending').length : 0;
+    final activePartners = isUserAdmin ? partners.where((p) => p.status == 'Active').length : 0;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final crossAxisCount = constraints.maxWidth > 800 ? 4 : (constraints.maxWidth > 500 ? 2 : 1);
+        final width = (constraints.maxWidth - (crossAxisCount - 1) * 16) / crossAxisCount;
+
+        final items = [
+          _StatCard(
+            title: 'TOTAL BOOKINGS',
+            value: '$totalBookings',
+            icon: Icons.assignment_turned_in_outlined,
+            color: const Color(0xFF6C5CE7),
+            width: width,
+          ),
+          if (isUserAdmin) ...[
+            _StatCard(
+              title: 'PENDING PARTNERS',
+              value: '$pendingPartners',
+              icon: Icons.handshake_outlined,
+              color: Colors.amber,
+              width: width,
+            ),
+            _StatCard(
+              title: 'ACTIVE PARTNERS',
+              value: '$activePartners',
+              icon: Icons.people_outline,
+              color: const Color(0xFF00CEC9),
+              width: width,
+            ),
+          ],
+          _StatCard(
+            title: 'TOTAL FLEET',
+            value: '$totalFleet',
+            icon: Icons.directions_car_outlined,
+            color: Colors.green,
+            width: width,
+          ),
+        ];
+
+        return Wrap(
+          spacing: 16,
+          runSpacing: 16,
+          children: items,
+        );
+      },
+    );
+  }
+
+  // --- 2. Partner Onboarding Applications ---
+  Widget _buildApplicationsSection(
+    BuildContext context,
+    WidgetRef ref,
+    AsyncValue<List<PartnerApplication>> applicationsAsync,
+  ) {
+    return _SectionCard(
+      title: 'Partner Comm-Links (Pending Applications)',
+      icon: Icons.connect_without_contact,
+      child: applicationsAsync.when(
+        data: (apps) {
+          final pending = apps.where((a) => a.status == 'Pending').toList();
+          if (pending.isEmpty) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20.0),
+              child: Center(
+                child: Text(
+                  'No pending partner applications.',
+                  style: TextStyle(color: Colors.white30, fontSize: 13),
+                ),
+              ),
+            );
+          }
+
+          return ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: pending.length,
+            separatorBuilder: (c, i) => const Divider(color: Colors.white10),
+            itemBuilder: (context, index) {
+              final app = pending[index];
+              return ListTile(
+                title: Text(app.companyName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                subtitle: Text('Contact: ${app.contactName} • ${app.phone} • ${app.email}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF6C5CE7),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: () async {
+                        final inviteToken = const Uuid().v4();
+                        await ref.read(partnerRepositoryProvider).approveApplication(app.id, inviteToken);
+                        ref.invalidate(partnerApplicationsListProvider);
+                        ref.invalidate(partnersListProvider);
+                      },
+                      child: const Text('Approve'),
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, s) => Text('Error: $e', style: const TextStyle(color: Colors.redAccent)),
+      ),
+    );
+  }
+
+  // --- 3. Active Partners Section ---
+  Widget _buildActivePartnersSection(
+    BuildContext context,
+    WidgetRef ref,
+    AsyncValue<List<Partner>> partnersAsync,
+  ) {
+    return _SectionCard(
+      title: 'Active Partners',
+      icon: Icons.handshake,
+      child: partnersAsync.when(
+        data: (partners) {
+          if (partners.isEmpty) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20.0),
+              child: Center(
+                child: Text('No active partners.', style: TextStyle(color: Colors.white30, fontSize: 13)),
+              ),
+            );
+          }
+
+          return ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: partners.length,
+            separatorBuilder: (c, i) => const Divider(color: Colors.white10),
+            itemBuilder: (context, index) {
+              final p = partners[index];
+              final isSuspended = p.status == 'Suspended';
+              return ListTile(
+                title: Text(p.companyName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                subtitle: Text('Contact: ${p.contactName} • ${p.email}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      p.status,
+                      style: TextStyle(
+                        color: isSuspended ? Colors.redAccent : const Color(0xFF00CEC9),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    IconButton(
+                      icon: Icon(
+                        isSuspended ? Icons.play_arrow : Icons.pause,
+                        color: Colors.amberAccent,
+                        size: 20,
+                      ),
+                      onPressed: () async {
+                        final newStatus = isSuspended ? 'Active' : 'Suspended';
+                        await ref.read(partnerRepositoryProvider).updatePartnerStatus(p.id, newStatus);
+                        ref.invalidate(partnersListProvider);
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+                      onPressed: () async {
+                        await ref.read(partnerRepositoryProvider).deletePartner(p.id);
+                        ref.invalidate(partnersListProvider);
+                      },
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, s) => Text('Error: $e'),
+      ),
+    );
+  }
+
+  // --- 4. Support Requests ---
+  Widget _buildSupportRequestsSection(
+    BuildContext context,
+    ValueNotifier<List<Map<String, String>>> supportRequests,
+  ) {
+    final list = supportRequests.value;
+    return _SectionCard(
+      title: 'Partner Support Requests (${list.length})',
+      icon: Icons.contact_support_outlined,
+      child: list.isEmpty
+          ? const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20.0),
+              child: Center(
+                child: Text('No pending support requests.', style: TextStyle(color: Colors.white30, fontSize: 13)),
+              ),
+            )
+          : ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: list.length,
+              separatorBuilder: (c, i) => const Divider(color: Colors.white10),
+              itemBuilder: (context, index) {
+                final req = list[index];
+                final isOpen = req['status'] == 'Open';
+                return ListTile(
+                  title: Text(req['subject']!, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                  subtitle: Text('From: ${req['partner']} • Date: ${req['date']}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isOpen ? Colors.redAccent.withOpacity(0.1) : Colors.green.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: isOpen ? Colors.redAccent : Colors.green),
+                        ),
+                        child: Text(
+                          req['status']!,
+                          style: TextStyle(color: isOpen ? Colors.redAccent : Colors.green, fontSize: 10, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      if (isOpen)
+                        IconButton(
+                          icon: const Icon(Icons.check_circle_outline, color: Colors.greenAccent, size: 20),
+                          onPressed: () {
+                            final newList = List<Map<String, String>>.from(supportRequests.value);
+                            newList[index]['status'] = 'Resolved';
+                            supportRequests.value = newList;
+                          },
+                        ),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),
+                        onPressed: () {
+                          final newList = List<Map<String, String>>.from(supportRequests.value);
+                          newList.removeAt(index);
+                          supportRequests.value = newList;
+                        },
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+    );
+  }
+
+  // --- 5. Locations Management ---
+  Widget _buildLocationsSection(
+    BuildContext context,
+    WidgetRef ref,
+    AsyncValue<List<Location>> locationsAsync,
+  ) {
+    final codeController = useTextEditingController();
+    final nameEnController = useTextEditingController();
+    final nameSqController = useTextEditingController();
+    final nameSrController = useTextEditingController();
+
+    return _SectionCard(
+      title: 'Locations Management',
+      icon: Icons.map_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Inline Add Form
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                flex: 1,
+                child: TextField(
+                  controller: codeController,
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  decoration: const InputDecoration(
+                    labelText: 'ID (e.g. PRN)',
+                    labelStyle: TextStyle(color: Colors.white60, fontSize: 11),
+                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 3,
+                child: TextField(
+                  controller: nameEnController,
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  decoration: const InputDecoration(
+                    labelText: 'Location Name (EN)',
+                    labelStyle: TextStyle(color: Colors.white60, fontSize: 11),
+                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00CEC9),
+                  foregroundColor: Colors.black,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () async {
+                  final code = codeController.text.trim();
+                  final nameEn = nameEnController.text.trim();
+                  if (code.isNotEmpty && nameEn.isNotEmpty) {
+                    final newLoc = Location(
+                      id: '',
+                      code: code,
+                      nameEn: nameEn,
+                      nameSq: nameSqController.text.isNotEmpty ? nameSqController.text.trim() : nameEn,
+                      nameSr: nameSrController.text.isNotEmpty ? nameSrController.text.trim() : nameEn,
+                    );
+                    await ref.read(vehicleRepositoryProvider).addLocation(newLoc);
+                    ref.invalidate(locationsProvider);
+                    codeController.clear();
+                    nameEnController.clear();
+                    nameSqController.clear();
+                    nameSrController.clear();
+                  }
+                },
+                child: const Text('Add', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Additional language fields collapsible or minor
+          ExpansionTile(
+            title: const Text('Add Translations (Optional)', style: TextStyle(color: Colors.white54, fontSize: 12)),
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: nameSqController,
+                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                      decoration: const InputDecoration(labelText: 'Name (SQ)', labelStyle: TextStyle(color: Colors.white54)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: nameSrController,
+                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                      decoration: const InputDecoration(labelText: 'Name (SR)', labelStyle: TextStyle(color: Colors.white54)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Locations List
+          locationsAsync.when(
+            data: (locs) {
+              return ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: locs.length,
+                separatorBuilder: (c, i) => const Divider(color: Colors.white10),
+                itemBuilder: (context, index) {
+                  final loc = locs[index];
+                  return ListTile(
+                    title: Text('${loc.nameEn} (${loc.code})', style: const TextStyle(color: Colors.white, fontSize: 14)),
+                    subtitle: Text('Code: ${loc.code} | SQ: ${loc.nameSq}', style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),
+                      onPressed: () async {
+                        await ref.read(vehicleRepositoryProvider).deleteLocation(loc.id);
+                        ref.invalidate(locationsProvider);
+                      },
+                    ),
+                  );
+                },
+              );
+            },
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, s) => Text('Error: $e'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- 6. User Roles Management ---
+  Widget _buildUserRolesSection(
+    BuildContext context,
+    WidgetRef ref,
+    AsyncValue<List<Profile>> profilesAsync,
+  ) {
+    return _SectionCard(
+      title: 'User Management',
+      icon: Icons.person_outline,
+      child: profilesAsync.when(
+        data: (profiles) {
+          return ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: profiles.length,
+            separatorBuilder: (c, i) => const Divider(color: Colors.white10),
+            itemBuilder: (context, index) {
+              final profile = profiles[index];
+              return ListTile(
+                title: Text(profile.email, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                subtitle: Text('ID: ${profile.id} | Role: ${profile.role}', style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                trailing: DropdownButton<String>(
+                  dropdownColor: const Color(0xFF16162B),
+                  underline: const SizedBox(),
+                  value: profile.role,
+                  style: const TextStyle(color: Color(0xFF00CEC9), fontWeight: FontWeight.bold, fontSize: 13),
+                  items: ['Customer', 'Partner', 'Admin'].map((role) {
+                    return DropdownMenuItem<String>(
+                      value: role,
+                      child: Text(role),
+                    );
+                  }).toList(),
+                  onChanged: (newRole) async {
+                    if (newRole != null) {
+                      await ref.read(profileRepositoryProvider).updateProfileRole(profile.id, newRole);
+                      ref.invalidate(profilesListProvider);
+                    }
+                  },
+                ),
+              );
+            },
+          );
+        },
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, s) => Text('Error: $e'),
+      ),
+    );
+  }
+
+  // --- 7. Fleet Management CRUD ---
+  Widget _buildFleetSection(
+    BuildContext context,
+    WidgetRef ref,
+    AsyncValue<List<Vehicle>> vehiclesAsync,
+    AsyncValue<List<Location>> locationsAsync,
+    Partner? partner,
+  ) {
+    final locationMap = locationsAsync.maybeWhen(
+      data: (list) => {for (var loc in list) loc.id: loc.nameEn},
+      orElse: () => <String, String>{},
+    );
+
+    return _SectionCard(
+      title: 'Fleet Management',
+      icon: Icons.directions_car_outlined,
+      child: vehiclesAsync.when(
+        data: (vehicles) {
+          final displayVehicles = partner == null
+              ? vehicles
+              : vehicles.where((v) => v.partnerId == partner.id).toList();
+
+          if (displayVehicles.isEmpty) {
+            return const Center(child: Text('No vehicles in fleet.', style: TextStyle(color: Colors.white38)));
+          }
+
+          return SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              columnSpacing: 20,
+              headingTextStyle: const TextStyle(color: Color(0xFF00CEC9), fontWeight: FontWeight.bold, fontSize: 13),
+              columns: const [
+                DataColumn(label: Text('Vehicle Details')),
+                DataColumn(label: Text('Transmission')),
+                DataColumn(label: Text('Fuel')),
+                DataColumn(label: Text('Hub Location')),
+                DataColumn(label: Text('Daily Rate')),
+                DataColumn(label: Text('Actions')),
+              ],
+              rows: displayVehicles.map((vehicle) {
+                return DataRow(
+                  cells: [
+                    DataCell(
+                      Row(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(6),
+                            child: Image.network(
+                              vehicle.imageUrl,
+                              width: 50,
+                              height: 38,
+                              fit: BoxFit.cover,
+                              errorBuilder: (c, e, s) => Container(width: 50, height: 38, color: Colors.grey[900], child: const Icon(Icons.car_crash, size: 16)),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text('${vehicle.brand} ${vehicle.model}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                              Text('ID: ${vehicle.id}', style: const TextStyle(color: Colors.white38, fontSize: 9)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    DataCell(Text(vehicle.transmission, style: const TextStyle(color: Colors.white70, fontSize: 12))),
+                    DataCell(Text(vehicle.fuelType, style: const TextStyle(color: Colors.white70, fontSize: 12))),
+                    DataCell(
+                      Row(
+                        children: [
+                          Text(locationMap[vehicle.locationId] ?? 'Unknown Hub', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                          IconButton(
+                            icon: const Icon(Icons.edit, size: 13, color: Colors.white38),
+                            onPressed: () => _showEditLocationDialog(context, ref, vehicle, locationsAsync.value ?? []),
+                          ),
+                        ],
+                      ),
+                    ),
+                    DataCell(
+                      Row(
+                        children: [
+                          Text('€${vehicle.pricePerDay.toStringAsFixed(0)}/d', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                          IconButton(
+                            icon: const Icon(Icons.edit, size: 13, color: Colors.white38),
+                            onPressed: () => _showEditPriceDialog(context, ref, vehicle),
+                          ),
+                        ],
+                      ),
+                    ),
+                    DataCell(
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),
+                        onPressed: () => _showDeleteVehicleDialog(context, ref, vehicle),
+                      ),
+                    ),
+                  ],
+                );
+              }).toList(),
+            ),
+          );
+        },
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, s) => Text('Error: $e'),
+      ),
+    );
+  }
+
+  // --- 8. Recent Bookings CRUD & Controls ---
+  Widget _buildRecentBookingsSection(
+    BuildContext context,
+    WidgetRef ref,
+    AsyncValue<List<Booking>> bookingsAsync,
+    AsyncValue<List<Vehicle>> vehiclesAsync,
+    Partner? partner,
+  ) {
+    final vehicleMap = vehiclesAsync.maybeWhen(
+      data: (list) => {for (var v in list) v.id: '${v.brand} ${v.model}'},
+      orElse: () => <String, String>{},
+    );
+
+    return _SectionCard(
+      title: 'Recent Bookings For My Vehicles',
+      icon: Icons.calendar_month_outlined,
+      action: ElevatedButton.icon(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF00CEC9),
+          foregroundColor: Colors.black,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        onPressed: () {
+          _showManualBookingDialog(context, ref, vehiclesAsync.value ?? [], partner);
+        },
+        icon: const Icon(Icons.add, size: 14, color: Colors.black),
+        label: const Text('Add Booking', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+      ),
+      child: bookingsAsync.when(
+        data: (bookings) {
+          final displayVehiclesIds = vehiclesAsync.maybeWhen(
+            data: (list) => partner == null ? list.map((v) => v.id).toSet() : list.where((v) => v.partnerId == partner.id).map((v) => v.id).toSet(),
+            orElse: () => <String>{},
+          );
+
+          final filteredBookings = bookings.where((b) => displayVehiclesIds.contains(b.vehicleId)).toList();
+
+          if (filteredBookings.isEmpty) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20.0),
+              child: Center(
+                child: Text('No recent bookings registered.', style: TextStyle(color: Colors.white30, fontSize: 13)),
+              ),
+            );
+          }
+
+          return ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: filteredBookings.length,
+            separatorBuilder: (c, i) => const Divider(color: Colors.white10),
+            itemBuilder: (context, index) {
+              final booking = filteredBookings[index];
+              final vehicleName = vehicleMap[booking.vehicleId] ?? 'Premium Vehicle';
+              final startStr = DateFormat('dd MMM yyyy').format(booking.startDate);
+              final endStr = DateFormat('dd MMM yyyy').format(booking.endDate);
+
+              final statusColor = booking.status == 'Confirmed'
+                  ? Colors.green
+                  : (booking.status == 'Cancelled' || booking.status == 'Rejected' ? Colors.redAccent : Colors.amber);
+
+              return Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.01),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 3,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            vehicleName,
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Customer: ${booking.fullName ?? "Guest"} • ${booking.phoneNumber ?? "N/A"}',
+                            style: const TextStyle(color: Colors.white70, fontSize: 11),
+                          ),
+                          Text(
+                            'Dates: $startStr - $endStr',
+                            style: const TextStyle(color: Colors.white54, fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      flex: 1,
+                      child: Text(
+                        '€${booking.totalPrice.toStringAsFixed(0)}',
+                        style: const TextStyle(color: Color(0xFF00CEC9), fontWeight: FontWeight.bold, fontSize: 15),
+                      ),
+                    ),
+                    Expanded(
+                      flex: 2,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: statusColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: statusColor.withOpacity(0.3)),
+                            ),
+                            child: Text(
+                              booking.status,
+                              style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          PopupMenuButton<String>(
+                            icon: const Icon(Icons.edit, size: 16, color: Colors.white54),
+                            color: const Color(0xFF16162B),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            onSelected: (newStatus) async {
+                              await ref
+                                  .read(adminBookingRepositoryProvider)
+                                  .updateBookingStatus(booking.id, newStatus);
+                              ref.invalidate(liveBookingsListProvider);
+                            },
+                            itemBuilder: (context) => [
+                              const PopupMenuItem(value: 'Pending', child: Text('Pending', style: TextStyle(color: Colors.amber, fontSize: 13))),
+                              const PopupMenuItem(value: 'Confirmed', child: Text('Confirmed', style: TextStyle(color: Colors.green, fontSize: 13))),
+                              const PopupMenuItem(value: 'Cancelled', child: Text('Cancelled', style: TextStyle(color: Colors.redAccent, fontSize: 13))),
+                              const PopupMenuItem(value: 'Rejected', child: Text('Rejected', style: TextStyle(color: Colors.red, fontSize: 13))),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, s) => Text('Error: $e'),
+      ),
+    );
+  }
+
+  // --- Inline Fleet CRUD Helpers ---
+  void _showEditPriceDialog(BuildContext context, WidgetRef ref, Vehicle vehicle) {
+    final controller = TextEditingController(text: vehicle.pricePerDay.toStringAsFixed(0));
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF16162B),
+        title: Text('Edit Rate for ${vehicle.brand} ${vehicle.model}', style: const TextStyle(color: Colors.white)),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          style: const TextStyle(color: Colors.white),
+          decoration: const InputDecoration(labelText: 'New Daily Rate (€)', labelStyle: TextStyle(color: Colors.white60)),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00CEC9)),
+            onPressed: () async {
+              final newRate = double.tryParse(controller.text.trim());
+              if (newRate != null) {
+                await ref.read(vehicleRepositoryProvider).updateVehicleRate(vehicle.id, newRate);
+                ref.invalidate(vehiclesListProvider);
+                if (context.mounted) Navigator.of(context).pop();
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditLocationDialog(BuildContext context, WidgetRef ref, Vehicle vehicle, List<Location> locations) {
+    Location? selected = locations.firstWhere((l) => l.id == vehicle.locationId, orElse: () => locations.first);
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          backgroundColor: const Color(0xFF16162B),
+          title: Text('Move ${vehicle.brand}', style: const TextStyle(color: Colors.white)),
+          content: DropdownButtonFormField<Location>(
+            dropdownColor: const Color(0xFF16162B),
+            value: selected,
+            items: locations.map((loc) => DropdownMenuItem(value: loc, child: Text(loc.nameEn, style: const TextStyle(color: Colors.white)))).toList(),
+            onChanged: (v) => setState(() => selected = v),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00CEC9)),
+              onPressed: () async {
+                if (selected != null) {
+                  await ref.read(vehicleRepositoryProvider).updateVehicleLocation(vehicle.id, selected!.id);
+                  ref.invalidate(vehiclesListProvider);
+                  if (context.mounted) Navigator.of(context).pop();
+                }
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showDeleteVehicleDialog(BuildContext context, WidgetRef ref, Vehicle vehicle) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF16162B),
+        title: const Text('Delete Vehicle', style: TextStyle(color: Colors.white)),
+        content: Text('Remove ${vehicle.brand} ${vehicle.model} permanently?', style: const TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () async {
+              await ref.read(vehicleRepositoryProvider).deleteVehicle(vehicle.id);
+              ref.invalidate(vehiclesListProvider);
+              if (context.mounted) Navigator.of(context).pop();
+            },
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- Booking creation dialog ---
+  void _showManualBookingDialog(BuildContext context, WidgetRef ref, List<Vehicle> vehicles, Partner? partner) {
+    final formKey = GlobalKey<FormState>();
+    final displayVehicles = partner == null ? vehicles : vehicles.where((v) => v.partnerId == partner.id).toList();
+
+    Vehicle? selectedVehicle = displayVehicles.isNotEmpty ? displayVehicles.first : null;
+    final nameController = TextEditingController();
+    final phoneController = TextEditingController();
+    final emailController = TextEditingController();
+    final rateController = TextEditingController(text: selectedVehicle?.pricePerDay.toStringAsFixed(0) ?? '50');
+
+    DateTime startDate = DateTime.now();
+    DateTime endDate = DateTime.now().add(const Duration(days: 3));
+    String selectedStatus = 'Pending';
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) {
+          final days = endDate.difference(startDate).inDays;
+          final total = (double.tryParse(rateController.text) ?? 50.0) * (days > 0 ? days : 1);
+
+          return AlertDialog(
+            backgroundColor: const Color(0xFF16162B),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Text('Add Booking Manually', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            content: SizedBox(
+              width: 480,
+              child: SingleChildScrollView(
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Vehicle Dropdown
+                      DropdownButtonFormField<Vehicle>(
+                        dropdownColor: const Color(0xFF16162B),
+                        value: selectedVehicle,
+                        decoration: const InputDecoration(labelText: 'Select Vehicle', labelStyle: TextStyle(color: Colors.white60)),
+                        items: displayVehicles.map((v) {
+                          return DropdownMenuItem(value: v, child: Text('${v.brand} ${v.model} (${v.year})', style: const TextStyle(color: Colors.white)));
+                        }).toList(),
+                        onChanged: (v) {
+                          setState(() {
+                            selectedVehicle = v;
+                            if (v != null) {
+                              rateController.text = v.pricePerDay.toStringAsFixed(0);
+                            }
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: nameController,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: const InputDecoration(labelText: 'Customer Full Name', labelStyle: TextStyle(color: Colors.white60)),
+                        validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: phoneController,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: const InputDecoration(labelText: 'Phone Number', labelStyle: TextStyle(color: Colors.white60)),
+                        validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: emailController,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: const InputDecoration(labelText: 'Email Address', labelStyle: TextStyle(color: Colors.white60)),
+                        validator: (v) => v == null || !v.contains('@') ? 'Invalid' : null,
+                      ),
+                      const SizedBox(height: 16),
+                      // Dates row
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Start Date', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                              OutlinedButton(
+                                onPressed: () async {
+                                  final d = await showDatePicker(context: context, firstDate: DateTime.now().subtract(const Duration(days: 365)), lastDate: DateTime.now().add(const Duration(days: 365)), initialDate: startDate);
+                                  if (d != null) setState(() => startDate = d);
+                                },
+                                child: Text(DateFormat('yyyy-MM-dd').format(startDate)),
+                              ),
+                            ],
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('End Date', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                              OutlinedButton(
+                                onPressed: () async {
+                                  final d = await showDatePicker(context: context, firstDate: startDate.add(const Duration(days: 1)), lastDate: DateTime.now().add(const Duration(days: 365)), initialDate: endDate.isAfter(startDate) ? endDate : startDate.add(const Duration(days: 1)));
+                                  if (d != null) setState(() => endDate = d);
+                                },
+                                child: Text(DateFormat('yyyy-MM-dd').format(endDate)),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      // Status dropdown
+                      DropdownButtonFormField<String>(
+                        dropdownColor: const Color(0xFF16162B),
+                        value: selectedStatus,
+                        decoration: const InputDecoration(labelText: 'Status', labelStyle: TextStyle(color: Colors.white60)),
+                        items: ['Pending', 'Confirmed', 'Cancelled', 'Rejected'].map((status) {
+                          return DropdownMenuItem(value: status, child: Text(status, style: const TextStyle(color: Colors.white)));
+                        }).toList(),
+                        onChanged: (v) => setState(() => selectedStatus = v ?? 'Pending'),
+                      ),
+                      const SizedBox(height: 20),
+                      // Total Estimate
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Calculated Total ($days days):', style: const TextStyle(color: Colors.white60, fontSize: 12)),
+                          Text('€${total.toStringAsFixed(0)}', style: const TextStyle(color: Color(0xFF00CEC9), fontWeight: FontWeight.bold, fontSize: 18)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C5CE7)),
+                onPressed: () async {
+                  if (formKey.currentState!.validate() && selectedVehicle != null) {
+                    final manualBooking = Booking(
+                      id: const Uuid().v4(),
+                      vehicleId: selectedVehicle!.id,
+                      userId: const Uuid().v4(),
+                      startDate: startDate,
+                      endDate: endDate,
+                      totalPrice: total,
+                      status: selectedStatus,
+                      fullName: nameController.text.trim(),
+                      phoneNumber: phoneController.text.trim(),
+                      emailAddress: emailController.text.trim(),
+                    );
+                    await ref.read(bookingRepositoryProvider).submitBooking(manualBooking);
+                    ref.invalidate(liveBookingsListProvider);
+                    if (context.mounted) Navigator.of(context).pop();
+                  }
+                },
+                child: const Text('Add Booking'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
 }
 
+// --- Minor Widget Helpers ---
 class _StatCard extends StatelessWidget {
   final String title;
   final String value;
   final IconData icon;
   final Color color;
+  final double width;
 
   const _StatCard({
     required this.title,
     required this.value,
     required this.icon,
     required this.color,
+    required this.width,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: width,
+      height: 100,
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A2E),
+        color: const Color(0xFF16162B),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withOpacity(0.06)),
       ),
@@ -252,32 +1177,69 @@ class _StatCard extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: const TextStyle(
-                  color: Colors.white54,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.1,
-                ),
+                style: const TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.1),
               ),
               Container(
                 padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(icon, color: color, size: 18),
+                decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                child: Icon(icon, color: color, size: 16),
               ),
             ],
           ),
           Text(
             value,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              fontFamily: 'Outfit',
-            ),
+            style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold, fontFamily: 'Outfit'),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionCard extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final Widget child;
+  final Widget? action;
+
+  const _SectionCard({
+    required this.title,
+    required this.icon,
+    required this.child,
+    this.action,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: const Color(0xFF16162B),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(icon, color: const Color(0xFF00CEC9), size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    title,
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, fontFamily: 'Outfit'),
+                  ),
+                ],
+              ),
+              if (action != null) action!,
+            ],
+          ),
+          const SizedBox(height: 16),
+          child,
         ],
       ),
     );

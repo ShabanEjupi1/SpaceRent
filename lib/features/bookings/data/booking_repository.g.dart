@@ -37,7 +37,7 @@ final bookingRepositoryProvider =
 );
 
 typedef BookingRepositoryRef = AutoDisposeProviderRef<BookingRepository>;
-String _$bookingControllerHash() => r'd4790a75fb9251f047112de242bc57969b76b174';
+String _$bookingControllerHash() => r'3327447966d8d99313dff950a63c024afa60cdfe';
 
 /// See also [BookingController].
 @ProviderFor(BookingController)

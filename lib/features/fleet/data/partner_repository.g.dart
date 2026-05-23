@@ -40,5 +40,19 @@ final partnerApplicationsListProvider =
 
 typedef PartnerApplicationsListRef
     = AutoDisposeFutureProviderRef<List<PartnerApplication>>;
+String _$partnersListHash() => r'392b3234b285eb851f4d1414cf62ce4564f21a2c';
+
+/// See also [partnersList].
+@ProviderFor(partnersList)
+final partnersListProvider = AutoDisposeFutureProvider<List<Partner>>.internal(
+  partnersList,
+  name: r'partnersListProvider',
+  debugGetCreateSourceHash:
+      const bool.fromEnvironment('dart.vm.product') ? null : _$partnersListHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+typedef PartnersListRef = AutoDisposeFutureProviderRef<List<Partner>>;
 // ignore_for_file: type=lint
 // ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member

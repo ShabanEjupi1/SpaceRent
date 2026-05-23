@@ -74,6 +74,9 @@ CREATE TABLE bookings (
     end_date TIMESTAMP WITH TIME ZONE NOT NULL,
     total_price NUMERIC(10, 2) NOT NULL,
     status VARCHAR(50) DEFAULT 'Pending' NOT NULL, -- 'Pending', 'Confirmed', 'Cancelled'
+    full_name VARCHAR(255),
+    phone_number VARCHAR(50),
+    email_address VARCHAR(255),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT check_dates CHECK (end_date > start_date)
 );
@@ -90,12 +93,26 @@ CREATE TABLE IF NOT EXISTS partner_applications (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 6. Profiles Table
+CREATE TABLE IF NOT EXISTS profiles (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    email VARCHAR(255) UNIQUE NOT NULL,
+    role VARCHAR(50) DEFAULT 'Customer' NOT NULL, -- 'Admin', 'Partner', 'Customer'
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Seed Default Admin Profile
+INSERT INTO profiles (id, email, role) VALUES
+('eb3d0851-c518-4034-b806-c88411160e24', 'shaban.ejj@gmail.com', 'Admin')
+ON CONFLICT (email) DO UPDATE SET role = 'Admin';
+
 -- Enable RLS
 ALTER TABLE locations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE vehicles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bookings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE partners ENABLE ROW LEVEL SECURITY;
 ALTER TABLE partner_applications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 
 -- Policies
 DROP POLICY IF EXISTS "Allow public read access to locations" ON locations;
@@ -124,4 +141,14 @@ CREATE POLICY "Allow public read of partners" ON partners FOR SELECT USING (true
 
 DROP POLICY IF EXISTS "Allow public insert of partners" ON partners;
 CREATE POLICY "Allow public insert of partners" ON partners FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow public read of profiles" ON profiles;
+CREATE POLICY "Allow public read of profiles" ON profiles FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Allow public insert of profiles" ON profiles;
+CREATE POLICY "Allow public insert of profiles" ON profiles FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all modifications on profiles" ON profiles;
+CREATE POLICY "Allow all modifications on profiles" ON profiles FOR ALL USING (true);
+
 

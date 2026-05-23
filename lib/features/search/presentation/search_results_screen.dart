@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../data/vehicle_repository.dart';
 import 'home_search_screen.dart';
@@ -94,7 +95,20 @@ class SearchResultsScreen extends ConsumerWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 20.0),
                     itemCount: vehicles.length,
                     itemBuilder: (context, index) {
-                      return CarCard(vehicle: vehicles[index]);
+                      final car = vehicles[index];
+                      return CarCard(
+                        vehicle: car,
+                        onTap: () {
+                          context.pushNamed(
+                            'car_details',
+                            pathParameters: {'id': car.id},
+                            queryParameters: {
+                              if (startDate != null) 'start': startDate!.toIso8601String(),
+                              if (endDate != null) 'end': endDate!.toIso8601String(),
+                            },
+                          );
+                        },
+                      );
                     },
                   ),
                 ),

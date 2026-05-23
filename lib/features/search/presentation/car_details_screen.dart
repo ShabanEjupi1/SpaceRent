@@ -1,16 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../../bookings/data/booking_repository.dart';
 import '../data/vehicle_repository.dart';
+import '../domain/vehicle.dart';
 import 'home_search_screen.dart';
 
 class CarDetailsScreen extends ConsumerWidget {
   final String carId;
+  final DateTime? startDate;
+  final DateTime? endDate;
 
   const CarDetailsScreen({
     super.key,
     required this.carId,
+    this.startDate,
+    this.endDate,
   });
 
   @override
@@ -69,6 +75,11 @@ class CarDetailsScreen extends ConsumerWidget {
           );
 
           final bookingState = ref.watch(bookingControllerProvider);
+          final resolvedStart = startDate ?? DateTime.now().add(const Duration(days: 1));
+          final resolvedEnd = endDate ?? DateTime.now().add(const Duration(days: 4));
+          final durationDays = resolvedEnd.difference(resolvedStart).inDays;
+          final calculatedDays = durationDays > 0 ? durationDays : 3;
+          final totalPrice = vehicle.pricePerDay * calculatedDays;
 
           return Stack(
             children: [
@@ -193,10 +204,10 @@ class CarDetailsScreen extends ConsumerWidget {
                             mainAxisSize: MainAxisSize.min,
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('Total Estimated (3 days)', style: TextStyle(color: Colors.white60, fontSize: 12)),
+                              Text('Total Estimated ($calculatedDays days)', style: const TextStyle(color: Colors.white60, fontSize: 12)),
                               const SizedBox(height: 4),
                               Text(
-                                '€${(vehicle.pricePerDay * 3).toStringAsFixed(2)}',
+                                '€${totalPrice.toStringAsFixed(2)}',
                                 style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
                               ),
                             ],
@@ -216,31 +227,16 @@ class CarDetailsScreen extends ConsumerWidget {
                               ),
                               onPressed: bookingState.isLoading
                                   ? null
-                                  : () async {
-                                      final now = DateTime.now();
-                                      final start = now.add(const Duration(days: 1));
-                                      final end = now.add(const Duration(days: 4));
-                                      final success = await ref
-                                          .read(bookingControllerProvider.notifier)
-                                          .bookVehicle(
-                                            vehicleId: vehicle.id,
-                                            startDate: start,
-                                            endDate: end,
-                                            totalPrice: vehicle.pricePerDay * 3,
-                                          );
-
-                                      if (context.mounted) {
-                                        if (success) {
-                                          _showSuccessDialog(context, t);
-                                        } else {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(
-                                              backgroundColor: Colors.red[800],
-                                              content: Text(t['errorMsg']!),
-                                            ),
-                                          );
-                                        }
-                                      }
+                                  : () {
+                                      _showCompleteBookingDialog(
+                                        context,
+                                        ref,
+                                        vehicle,
+                                        resolvedStart,
+                                        resolvedEnd,
+                                        totalPrice,
+                                        t,
+                                      );
                                     },
                               child: bookingState.isLoading
                                   ? const SizedBox(
@@ -292,6 +288,239 @@ class CarDetailsScreen extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+
+  void _showCompleteBookingDialog(
+    BuildContext context,
+    WidgetRef ref,
+    Vehicle vehicle,
+    DateTime start,
+    DateTime end,
+    double totalPrice,
+    Map<String, String> t,
+  ) {
+    final formKey = GlobalKey<FormState>();
+    final nameController = TextEditingController();
+    final phoneController = TextEditingController();
+    final emailController = TextEditingController();
+    final isSaving = ValueNotifier<bool>(false);
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        final startStr = DateFormat('MMM dd, yyyy').format(start);
+        final endStr = DateFormat('MMM dd, yyyy').format(end);
+
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF16162B),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Complete Booking',
+                    style: TextStyle(color: Colors.white, fontFamily: 'Outfit', fontWeight: FontWeight.bold),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Provide contact details to finalize your reservation',
+                    style: TextStyle(color: Colors.white54, fontSize: 12),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: 450,
+                child: SingleChildScrollView(
+                  child: Form(
+                    key: formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Vehicle Info Card
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.04),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.white.withOpacity(0.04)),
+                          ),
+                          child: Row(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.network(
+                                  vehicle.imageUrl,
+                                  width: 80,
+                                  height: 60,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (c, e, s) => Container(
+                                    width: 80,
+                                    height: 60,
+                                    color: Colors.grey[900],
+                                    child: const Icon(Icons.directions_car, color: Colors.white24),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '${vehicle.brand} ${vehicle.model}',
+                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '€${vehicle.pricePerDay.toStringAsFixed(0)} / day',
+                                      style: const TextStyle(color: Color(0xFF00CEC9), fontSize: 13, fontWeight: FontWeight.w600),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Dates display
+                        const Text(
+                          'Dates:',
+                          style: TextStyle(color: Color(0xFF00CEC9), fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '$startStr - $endStr',
+                          style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Input fields
+                        TextFormField(
+                          controller: nameController,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: const InputDecoration(
+                            labelText: 'Full Name',
+                            labelStyle: TextStyle(color: Colors.white60),
+                            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                            focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF00CEC9))),
+                            prefixIcon: Icon(Icons.person_outline, color: Colors.white38),
+                          ),
+                          validator: (v) => v == null || v.isEmpty ? 'Please enter your full name' : null,
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: phoneController,
+                          keyboardType: TextInputType.phone,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: const InputDecoration(
+                            labelText: 'Phone Number',
+                            labelStyle: TextStyle(color: Colors.white60),
+                            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                            focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF00CEC9))),
+                            prefixIcon: Icon(Icons.phone_outlined, color: Colors.white38),
+                          ),
+                          validator: (v) => v == null || v.isEmpty ? 'Please enter your phone number' : null,
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: emailController,
+                          keyboardType: TextInputType.emailAddress,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: const InputDecoration(
+                            labelText: 'Email Address',
+                            labelStyle: TextStyle(color: Colors.white60),
+                            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                            focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF00CEC9))),
+                            prefixIcon: Icon(Icons.email_outlined, color: Colors.white38),
+                          ),
+                          validator: (v) => v == null || !v.contains('@') ? 'Please enter a valid email address' : null,
+                        ),
+                        const SizedBox(height: 24),
+
+                        // Pricing detail
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Total Price:', style: TextStyle(color: Colors.white60, fontSize: 13)),
+                            Text(
+                              '€${totalPrice.toStringAsFixed(2)}',
+                              style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSaving.value ? null : () => Navigator.of(context).pop(),
+                  child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6C5CE7),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: isSaving.value
+                      ? null
+                      : () async {
+                          if (formKey.currentState!.validate()) {
+                            setState(() {
+                              isSaving.value = true;
+                            });
+
+                            final success = await ref
+                                .read(bookingControllerProvider.notifier)
+                                .bookVehicle(
+                                  vehicleId: vehicle.id,
+                                  startDate: start,
+                                  endDate: end,
+                                  totalPrice: totalPrice,
+                                  fullName: nameController.text.trim(),
+                                  phoneNumber: phoneController.text.trim(),
+                                  emailAddress: emailController.text.trim(),
+                                );
+
+                            setState(() {
+                              isSaving.value = false;
+                            });
+
+                            if (context.mounted) {
+                              if (success) {
+                                Navigator.of(context).pop(); // Dismiss Form Dialog
+                                _showSuccessDialog(context, t);
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    backgroundColor: Colors.red[800],
+                                    content: Text(t['errorMsg']!),
+                                  ),
+                                );
+                              }
+                            }
+                          }
+                        },
+                  child: isSaving.value
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                        )
+                      : const Text('Confirm Booking', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }

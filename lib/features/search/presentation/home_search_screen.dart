@@ -3,6 +3,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../fleet/data/partner_repository.dart';
 import '../data/vehicle_repository.dart';
 import '../domain/location.dart';
 
@@ -94,7 +95,7 @@ class HomeSearchScreen extends HookConsumerWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           GestureDetector(
-                            onDoubleTap: () => _showAdminPasscodeDialog(context),
+                            onDoubleTap: () => _showAdminPasscodeDialog(context, ref),
                             child: Text(
                               t['title']!,
                               style: Theme.of(context).textTheme.titleLarge?.copyWith(
@@ -354,7 +355,7 @@ class HomeSearchScreen extends HookConsumerWidget {
     );
   }
 
-  void _showAdminPasscodeDialog(BuildContext context) {
+  void _showAdminPasscodeDialog(BuildContext context, WidgetRef ref) {
     final controller = TextEditingController();
     showDialog(
       context: context,
@@ -380,6 +381,7 @@ class HomeSearchScreen extends HookConsumerWidget {
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C5CE7)),
             onPressed: () {
               if (controller.text.trim() == '2026') {
+                ref.read(isAdminProvider.notifier).state = true;
                 Navigator.of(context).pop();
                 context.go('/admin');
               } else {

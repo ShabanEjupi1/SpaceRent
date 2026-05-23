@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../fleet/data/partner_repository.dart';
 
-class AdminShellLayout extends StatelessWidget {
+class AdminShellLayout extends ConsumerWidget {
   final Widget child;
 
   const AdminShellLayout({
@@ -10,8 +12,9 @@ class AdminShellLayout extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final location = GoRouterState.of(context).uri.toString();
+    final partner = ref.watch(currentPartnerProvider);
 
     // Determine current selected index based on route location path
     int getSelectedIndex() {
@@ -54,10 +57,10 @@ class AdminShellLayout extends StatelessWidget {
                         child: const Icon(Icons.rocket_launch, color: Colors.white, size: 22),
                       ),
                       const SizedBox(width: 14),
-                      const Column(
+                      Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
+                          const Text(
                             'SpaceRent',
                             style: TextStyle(
                               fontSize: 18,
@@ -67,8 +70,8 @@ class AdminShellLayout extends StatelessWidget {
                             ),
                           ),
                           Text(
-                            'ADMIN PORTAL',
-                            style: TextStyle(
+                            partner != null ? 'PARTNER PORTAL' : 'ADMIN PORTAL',
+                            style: const TextStyle(
                               fontSize: 9,
                               color: Color(0xFF00CEC9), // Neo Teal
                               fontWeight: FontWeight.bold,
@@ -108,42 +111,75 @@ class AdminShellLayout extends StatelessWidget {
                   isActive: getSelectedIndex() == 2,
                   onTap: () => context.go('/admin/bookings'),
                 ),
-                const SizedBox(height: 8),
-                _SidebarMenuItem(
-                  icon: Icons.people_outline,
-                  activeIcon: Icons.people,
-                  title: 'Partner Onboarding',
-                  isActive: getSelectedIndex() == 3,
-                  onTap: () => context.go('/admin/applications'),
-                ),
+                if (partner == null) ...[
+                  const SizedBox(height: 8),
+                  _SidebarMenuItem(
+                    icon: Icons.people_outline,
+                    activeIcon: Icons.people,
+                    title: 'Partner Onboarding',
+                    isActive: getSelectedIndex() == 3,
+                    onTap: () => context.go('/admin/applications'),
+                  ),
+                ],
 
                 const Spacer(),
 
                 // Bottom User Profile Info card
                 Container(
-                  padding: const EdgeInsets.all(20.0),
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
                   decoration: const BoxDecoration(
                     border: Border(top: BorderSide(color: Colors.white10)),
                   ),
-                  child: Row(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      CircleAvatar(
-                        backgroundColor: const Color(0xFF6C5CE7).withOpacity(0.2),
-                        child: const Text('XK', style: TextStyle(color: Color(0xFF00CEC9), fontWeight: FontWeight.bold)),
-                      ),
-                      const SizedBox(width: 12),
-                      const Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      Row(
                         children: [
-                          Text(
-                            'PRN Hub Admin',
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          CircleAvatar(
+                            backgroundColor: const Color(0xFF6C5CE7).withOpacity(0.2),
+                            child: Text(
+                              partner != null ? 'P' : 'AD',
+                              style: const TextStyle(color: Color(0xFF00CEC9), fontWeight: FontWeight.bold),
+                            ),
                           ),
-                          Text(
-                            'Pristina, Kosovo',
-                            style: TextStyle(color: Colors.white54, fontSize: 11),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  partner != null ? partner.companyName : 'PRN Hub Admin',
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                Text(
+                                  partner != null ? 'Partner User' : 'Pristina, Kosovo',
+                                  style: const TextStyle(color: Colors.white54, fontSize: 11),
+                                ),
+                              ],
+                            ),
                           ),
                         ],
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 36,
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.redAccent,
+                            side: const BorderSide(color: Colors.redAccent),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          onPressed: () {
+                            ref.read(isAdminProvider.notifier).state = false;
+                            ref.read(currentPartnerProvider.notifier).state = null;
+                            context.go('/');
+                          },
+                          icon: const Icon(Icons.logout, size: 14),
+                          label: const Text('Logout', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        ),
                       ),
                     ],
                   ),

@@ -25,14 +25,17 @@ class BookingRepository {
     try {
       final response = await _supabase
           .from('bookings')
-          .select('id')
+          .select('id, status')
           .eq('vehicle_id', vehicleId)
-          .neq('status', 'Cancelled')
           .lt('start_date', endDate.toIso8601String())
           .gt('end_date', startDate.toIso8601String());
 
       final bookings = response as List;
-      return bookings.isEmpty;
+      final activeBookings = bookings.where((b) {
+        final status = b['status'] as String;
+        return status != 'Cancelled' && status != 'Rejected';
+      });
+      return activeBookings.isEmpty;
     } catch (e) {
       // In development or if Supabase is offline/not initialized properly,
       // fail gracefully or mock availability check.
@@ -79,6 +82,9 @@ class BookingController extends _$BookingController {
     required DateTime startDate,
     required DateTime endDate,
     required double totalPrice,
+    required String fullName,
+    required String phoneNumber,
+    required String emailAddress,
   }) async {
     state = const AsyncValue.loading();
     
@@ -104,7 +110,10 @@ class BookingController extends _$BookingController {
         startDate: startDate,
         endDate: endDate,
         totalPrice: totalPrice,
-        status: 'Confirmed',
+        status: 'Pending',
+        fullName: fullName,
+        phoneNumber: phoneNumber,
+        emailAddress: emailAddress,
       );
 
       await repository.submitBooking(booking);
@@ -114,3 +123,4 @@ class BookingController extends _$BookingController {
     return !result.hasError;
   }
 }
+
