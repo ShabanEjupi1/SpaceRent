@@ -14,10 +14,10 @@ void main() async {
   const urlEnv = String.fromEnvironment('SUPABASE_URL');
   const keyEnv = String.fromEnvironment('SUPABASE_ANON_KEY');
 
-  const supabaseUrl = urlEnv.isNotEmpty
+  const supabaseUrl = urlEnv != ''
       ? urlEnv
       : 'https://rrjndmbihxblkwzwmhoi.supabase.co';
-  const supabaseAnonKey = keyEnv.isNotEmpty
+  const supabaseAnonKey = keyEnv != ''
       ? keyEnv
       : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJyam5kbWJpaHhibGt3endtaG9pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk1MzE2NDUsImV4cCI6MjA5NTEwNzY0NX0.-ZmVh41piYGFr93xaf4ks72c3fjC8gbRQdPm1l4Yn_Y';
 
