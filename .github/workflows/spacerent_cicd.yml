@@ -54,6 +54,8 @@ jobs:
   # 2. Build Android App (APK & AAB) and Deploy to Google Play Store
   build-android:
     runs-on: ubuntu-latest
+    env:
+      PLAY_STORE_JSON_KEY: ${{ secrets.PLAY_STORE_JSON_KEY }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -77,9 +79,11 @@ jobs:
         run: flutter pub run build_runner build --delete-conflicting-outputs
 
       - name: Decode Android Keystore
+        env:
+          PLAY_STORE_KEYSTORE_BASE64: ${{ secrets.PLAY_STORE_KEYSTORE_BASE64 }}
         run: |
-          if [ ! -z "${{ secrets.PLAY_STORE_KEYSTORE_BASE64 }}" ]; then
-            echo "${{ secrets.PLAY_STORE_KEYSTORE_BASE64 }}" | base64 --decode > android/app/release-key.jks
+          if [ ! -z "$PLAY_STORE_KEYSTORE_BASE64" ]; then
+            echo "$PLAY_STORE_KEYSTORE_BASE64" | base64 --decode > android/app/release-key.jks
           fi
 
       - name: Build Release APK
@@ -105,7 +109,7 @@ jobs:
       # CD deployment to Google Play Store (triggers if JSON key exists in secrets)
       - name: Deploy to Google Play Store (Internal Track)
         uses: r0adkll/upload-google-play@v1
-        if: "${{ secrets.PLAY_STORE_JSON_KEY != '' }}"
+        if: ${{ env.PLAY_STORE_JSON_KEY != '' }}
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_JSON_KEY }}
           packageName: com.spacerent.kosovo
@@ -116,6 +120,8 @@ jobs:
   # 3. Build iOS App (IPA) and Deploy to Apple App Store (TestFlight)
   build-ios:
     runs-on: macos-latest
+    env:
+      APP_STORE_CONNECT_API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -142,7 +148,7 @@ jobs:
       # To publish to TestFlight/App Store, Fastlane and provisioning profiles are used.
       # Set up Fastlane match and code-signing when secrets are populated.
       - name: Install Apple Provisioning Profiles and Code Sign (Conditional)
-        if: "${{ secrets.APP_STORE_CONNECT_API_KEY != '' }}"
+        if: ${{ env.APP_STORE_CONNECT_API_KEY != '' }}
         env:
           APP_STORE_API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
