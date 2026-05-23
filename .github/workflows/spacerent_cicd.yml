@@ -78,6 +78,26 @@ jobs:
       - name: Run Build Runner (Code Generation)
         run: flutter pub run build_runner build --delete-conflicting-outputs
 
+      - name: Create Gradle Init Script to Force Kotlin Options
+        run: |
+          mkdir -p ~/.gradle/init.d
+          cat << 'EOF' > ~/.gradle/init.d/kotlin-options.gradle
+          allprojects {
+              tasks.configureEach { task ->
+                  if (task.class.name.contains("KotlinCompile")) {
+                      try {
+                          task.kotlinOptions {
+                              languageVersion = "1.8"
+                              apiVersion = "1.8"
+                          }
+                      } catch (Exception e) {
+                          // Ignore
+                      }
+                  }
+              }
+          }
+          EOF
+
       - name: Decode Android Keystore
         env:
           PLAY_STORE_KEYSTORE_BASE64: ${{ secrets.PLAY_STORE_KEYSTORE_BASE64 }}
