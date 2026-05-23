@@ -46,7 +46,9 @@ jobs:
         run: |
           flutter build web --release --base-href "/SpaceRent/" \
             --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
-            --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}"
+            --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}" \
+            --dart-define=PAYPAL_CLIENT_ID="${{ secrets.PAYPAL_CLIENT_ID }}" \
+            --dart-define=PAYPAL_API_BASE="${{ secrets.PAYPAL_API_BASE }}"
 
       - name: Upload Pages Artifact
         uses: actions/upload-pages-artifact@v3
@@ -123,13 +125,17 @@ jobs:
         run: |
           flutter build apk --release \
             --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
-            --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}"
+            --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}" \
+            --dart-define=PAYPAL_CLIENT_ID="${{ secrets.PAYPAL_CLIENT_ID }}" \
+            --dart-define=PAYPAL_API_BASE="${{ secrets.PAYPAL_API_BASE }}"
 
       - name: Build Release App Bundle (AAB)
         run: |
           flutter build appbundle --release \
             --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
-            --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}"
+            --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}" \
+            --dart-define=PAYPAL_CLIENT_ID="${{ secrets.PAYPAL_CLIENT_ID }}" \
+            --dart-define=PAYPAL_API_BASE="${{ secrets.PAYPAL_API_BASE }}"
 
       - name: Upload Android Artifacts
         uses: actions/upload-artifact@v4
@@ -175,7 +181,9 @@ jobs:
         run: |
           flutter build ios --release --no-codesign \
             --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
-            --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}"
+            --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}" \
+            --dart-define=PAYPAL_CLIENT_ID="${{ secrets.PAYPAL_CLIENT_ID }}" \
+            --dart-define=PAYPAL_API_BASE="${{ secrets.PAYPAL_API_BASE }}"
 
       # Unsigned builds cannot go to TestFlight directly.
       # To publish to TestFlight/App Store, Fastlane and provisioning profiles are used.

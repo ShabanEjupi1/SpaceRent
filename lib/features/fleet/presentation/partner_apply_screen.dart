@@ -5,6 +5,9 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../data/partner_repository.dart';
 import '../domain/partner.dart';
+import '../../../core/l10n/locale_provider.dart';
+import '../../notifications/email_service.dart';
+import '../../bookings/data/booking_repository.dart';
 
 class PartnerApplyScreen extends HookConsumerWidget {
   const PartnerApplyScreen({super.key});
@@ -19,6 +22,7 @@ class PartnerApplyScreen extends HookConsumerWidget {
 
     final isSubmitting = useState<bool>(false);
     final isSuccess = useState<bool>(false);
+    final lang = ref.watch(localeProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F0F1A),
@@ -54,9 +58,9 @@ class PartnerApplyScreen extends HookConsumerWidget {
                       children: [
                         const Icon(Icons.verified, size: 80, color: Color(0xFF00CEC9)),
                         const SizedBox(height: 24),
-                        const Text(
-                          'Application Received!',
-                          style: TextStyle(
+                        Text(
+                          tr('application_received', ref),
+                          style: const TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
@@ -64,10 +68,10 @@ class PartnerApplyScreen extends HookConsumerWidget {
                           ),
                         ),
                         const SizedBox(height: 12),
-                        const Text(
-                          'Thank you for applying to SpaceRent Kosovo. Our team will review your credentials and email you an onboarding confirmation containing your secure invite link.',
+                        Text(
+                          tr('application_thanks', ref),
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.5),
+                          style: const TextStyle(color: Colors.white70, fontSize: 14, height: 1.5),
                         ),
                         const SizedBox(height: 32),
                         SizedBox(
@@ -80,7 +84,7 @@ class PartnerApplyScreen extends HookConsumerWidget {
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             ),
                             onPressed: () => Navigator.of(context).pop(),
-                            child: const Text('Back to App', style: TextStyle(fontWeight: FontWeight.bold)),
+                            child: Text(tr('back_to_app', ref), style: const TextStyle(fontWeight: FontWeight.bold)),
                           ),
                         ),
                       ],
@@ -91,27 +95,55 @@ class PartnerApplyScreen extends HookConsumerWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          // Language Toggle
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              _LangBtn(
+                                label: 'EN',
+                                isActive: lang == 'en',
+                                onTap: () => ref.read(localeProvider.notifier).state = 'en',
+                              ),
+                              const SizedBox(width: 8),
+                              _LangBtn(
+                                label: 'AL',
+                                isActive: lang == 'sq',
+                                onTap: () => ref.read(localeProvider.notifier).state = 'sq',
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+
                           Row(
                             children: [
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF6C5CE7).withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(10),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: Image.asset(
+                                  'assets/images/spacerent_logo.png',
+                                  width: 40,
+                                  height: 40,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (c, e, s) => Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF6C5CE7).withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: const Icon(Icons.handshake_outlined, color: Color(0xFF00CEC9), size: 24),
+                                  ),
                                 ),
-                                child: const Icon(Icons.handshake_outlined, color: Color(0xFF00CEC9), size: 24),
                               ),
                               const SizedBox(width: 14),
-                              const Column(
+                              Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'Join SpaceRent',
-                                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white, fontFamily: 'Outfit'),
+                                    tr('join_spacerent', ref),
+                                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white, fontFamily: 'Outfit'),
                                   ),
                                   Text(
-                                    'Become a Kosovo Partner Hub',
-                                    style: TextStyle(color: Colors.white54, fontSize: 11),
+                                    tr('become_partner', ref),
+                                    style: const TextStyle(color: Colors.white54, fontSize: 11),
                                   ),
                                 ],
                               ),
@@ -121,51 +153,51 @@ class PartnerApplyScreen extends HookConsumerWidget {
 
                           TextFormField(
                             controller: companyController,
-                            decoration: const InputDecoration(
-                              labelText: 'Company / Business Name',
-                              labelStyle: TextStyle(color: Colors.white60),
-                              enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                            decoration: InputDecoration(
+                              labelText: tr('company_name', ref),
+                              labelStyle: const TextStyle(color: Colors.white60),
+                              enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
                             ),
                             style: const TextStyle(color: Colors.white),
-                            validator: (v) => v == null || v.isEmpty ? 'Please enter company name' : null,
+                            validator: (v) => v == null || v.isEmpty ? tr('enter_company', ref) : null,
                           ),
                           const SizedBox(height: 16),
 
                           TextFormField(
                             controller: nameController,
-                            decoration: const InputDecoration(
-                              labelText: 'Contact Person Name',
-                              labelStyle: TextStyle(color: Colors.white60),
-                              enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                            decoration: InputDecoration(
+                              labelText: tr('contact_person', ref),
+                              labelStyle: const TextStyle(color: Colors.white60),
+                              enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
                             ),
                             style: const TextStyle(color: Colors.white),
-                            validator: (v) => v == null || v.isEmpty ? 'Please enter contact name' : null,
+                            validator: (v) => v == null || v.isEmpty ? tr('enter_contact', ref) : null,
                           ),
                           const SizedBox(height: 16),
 
                           TextFormField(
                             controller: emailController,
                             keyboardType: TextInputType.emailAddress,
-                            decoration: const InputDecoration(
-                              labelText: 'Business Email Address',
-                              labelStyle: TextStyle(color: Colors.white60),
-                              enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                            decoration: InputDecoration(
+                              labelText: tr('business_email', ref),
+                              labelStyle: const TextStyle(color: Colors.white60),
+                              enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
                             ),
                             style: const TextStyle(color: Colors.white),
-                            validator: (v) => v == null || !v.contains('@') ? 'Invalid email address' : null,
+                            validator: (v) => v == null || !v.contains('@') ? tr('invalid_email', ref) : null,
                           ),
                           const SizedBox(height: 16),
 
                           TextFormField(
                             controller: phoneController,
                             keyboardType: TextInputType.phone,
-                            decoration: const InputDecoration(
-                              labelText: 'Contact Phone Number',
-                              labelStyle: TextStyle(color: Colors.white60),
-                              enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                            decoration: InputDecoration(
+                              labelText: tr('contact_phone', ref),
+                              labelStyle: const TextStyle(color: Colors.white60),
+                              enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
                             ),
                             style: const TextStyle(color: Colors.white),
-                            validator: (v) => v == null || v.isEmpty ? 'Please enter phone number' : null,
+                            validator: (v) => v == null || v.isEmpty ? tr('enter_phone_number', ref) : null,
                           ),
                           const SizedBox(height: 36),
 
@@ -192,22 +224,40 @@ class PartnerApplyScreen extends HookConsumerWidget {
                                           status: 'Pending',
                                         );
 
-                                        await ref.read(partnerRepositoryProvider).submitApplication(app);
-                                        isSuccess.value = true;
+                                         try {
+                                           await ref.read(partnerRepositoryProvider).submitApplication(app);
+                                           
+                                           // Send partner application confirmation email
+                                           final emailService = EmailService(ref.read(supabaseClientProvider));
+                                           await emailService.sendPartnerApplicationReceivedEmail(
+                                             toEmail: app.email,
+                                             companyName: app.companyName,
+                                             contactName: app.contactName,
+                                           );
+
+                                           isSuccess.value = true;
+                                         } catch (e) {
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(backgroundColor: Colors.redAccent, content: Text('Error: $e')),
+                                            );
+                                          }
+                                          isSubmitting.value = false;
+                                        }
                                       }
                                     },
                               child: isSubmitting.value
                                   ? const CircularProgressIndicator(color: Colors.white)
-                                  : const Text('Submit Application', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                  : Text(tr('submit_application', ref), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                             ),
                           ),
                           const SizedBox(height: 20),
                           Center(
                             child: TextButton(
                               onPressed: () => context.go('/partner/login'),
-                              child: const Text(
-                                'Already a partner? Sign In here',
-                                style: TextStyle(color: Color(0xFF00CEC9), fontWeight: FontWeight.bold),
+                              child: Text(
+                                tr('already_partner', ref),
+                                style: const TextStyle(color: Color(0xFF00CEC9), fontWeight: FontWeight.bold),
                               ),
                             ),
                           ),
@@ -215,6 +265,38 @@ class PartnerApplyScreen extends HookConsumerWidget {
                       ),
                     ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LangBtn extends StatelessWidget {
+  final String label;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  const _LangBtn({required this.label, required this.isActive, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: isActive ? const Color(0xFF6C5CE7) : Colors.white.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: isActive ? const Color(0xFF6C5CE7) : Colors.white.withOpacity(0.12)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isActive ? Colors.white : Colors.white60,
+            fontWeight: FontWeight.bold,
+            fontSize: 12,
           ),
         ),
       ),

@@ -9,6 +9,10 @@ class Booking {
   final String? fullName;
   final String? phoneNumber;
   final String? emailAddress;
+  final String? language; // 'en' or 'sq' — user locale at booking time
+  final String paymentStatus; // 'Unpaid', 'Paid'
+  final String? paypalOrderId;
+  final DateTime? paidAt;
 
   Booking({
     required this.id,
@@ -21,6 +25,10 @@ class Booking {
     this.fullName,
     this.phoneNumber,
     this.emailAddress,
+    this.language,
+    this.paymentStatus = 'Unpaid',
+    this.paypalOrderId,
+    this.paidAt,
   });
 
   factory Booking.fromJson(Map<String, dynamic> json) {
@@ -35,6 +43,10 @@ class Booking {
       fullName: json['full_name'] as String?,
       phoneNumber: json['phone_number'] as String?,
       emailAddress: json['email_address'] as String?,
+      language: json['language'] as String?,
+      paymentStatus: json['payment_status'] as String? ?? 'Unpaid',
+      paypalOrderId: json['paypal_order_id'] as String?,
+      paidAt: json['paid_at'] != null ? DateTime.parse(json['paid_at'] as String) : null,
     );
   }
 
@@ -50,7 +62,10 @@ class Booking {
       'full_name': fullName,
       'phone_number': phoneNumber,
       'email_address': emailAddress,
+      'language': language ?? 'en',
+      'payment_status': paymentStatus,
+      'paypal_order_id': paypalOrderId,
+      'paid_at': paidAt?.toIso8601String(),
     };
   }
 }
-

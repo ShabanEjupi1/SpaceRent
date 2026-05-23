@@ -5,6 +5,9 @@ class Partner {
   final String email;
   final String phone;
   final String status;
+  final String subscriptionStatus; // 'Active', 'Inactive', 'Cancelled'
+  final DateTime? subscriptionExpiresAt;
+  final String? paypalSubscriptionId;
 
   Partner({
     required this.id,
@@ -13,6 +16,9 @@ class Partner {
     required this.email,
     required this.phone,
     required this.status,
+    this.subscriptionStatus = 'Inactive',
+    this.subscriptionExpiresAt,
+    this.paypalSubscriptionId,
   });
 
   factory Partner.fromJson(Map<String, dynamic> json) {
@@ -23,6 +29,11 @@ class Partner {
       email: json['email'] as String,
       phone: json['phone'] as String,
       status: json['status'] as String,
+      subscriptionStatus: json['subscription_status'] as String? ?? 'Inactive',
+      subscriptionExpiresAt: json['subscription_expires_at'] != null 
+          ? DateTime.parse(json['subscription_expires_at'] as String) 
+          : null,
+      paypalSubscriptionId: json['paypal_subscription_id'] as String?,
     );
   }
 
@@ -34,6 +45,9 @@ class Partner {
       'email': email,
       'phone': phone,
       'status': status,
+      'subscription_status': subscriptionStatus,
+      'subscription_expires_at': subscriptionExpiresAt?.toIso8601String(),
+      'paypal_subscription_id': paypalSubscriptionId,
     };
   }
 }

@@ -3,6 +3,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../data/partner_repository.dart';
+import '../../../core/l10n/locale_provider.dart';
 
 class PartnerLoginScreen extends HookConsumerWidget {
   const PartnerLoginScreen({super.key});
@@ -15,6 +16,7 @@ class PartnerLoginScreen extends HookConsumerWidget {
 
     final isSubmitting = useState<bool>(false);
     final errorMessage = useState<String?>(null);
+    final lang = ref.watch(localeProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F0F1A),
@@ -50,24 +52,52 @@ class PartnerLoginScreen extends HookConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Brand Header
+                    // Language Toggle
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        _LangBtn(
+                          label: 'EN',
+                          isActive: lang == 'en',
+                          onTap: () => ref.read(localeProvider.notifier).state = 'en',
+                        ),
+                        const SizedBox(width: 8),
+                        _LangBtn(
+                          label: 'AL',
+                          isActive: lang == 'sq',
+                          onTap: () => ref.read(localeProvider.notifier).state = 'sq',
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Brand Header with Logo
                     Row(
                       children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF6C5CE7).withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(12),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.asset(
+                            'assets/images/spacerent_logo.png',
+                            width: 44,
+                            height: 44,
+                            fit: BoxFit.cover,
+                            errorBuilder: (c, e, s) => Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF6C5CE7).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Icon(Icons.handshake_outlined, color: Color(0xFF00CEC9), size: 24),
+                            ),
                           ),
-                          child: const Icon(Icons.handshake_outlined, color: Color(0xFF00CEC9), size: 24),
                         ),
                         const SizedBox(width: 14),
-                        const Column(
+                        Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Partner Portal',
-                              style: TextStyle(
+                              tr('partner_portal', ref),
+                              style: const TextStyle(
                                 fontSize: 20,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.white,
@@ -75,8 +105,8 @@ class PartnerLoginScreen extends HookConsumerWidget {
                               ),
                             ),
                             Text(
-                              'SpaceRent Kosovo Hubs',
-                              style: TextStyle(color: Colors.white54, fontSize: 11),
+                              tr('spacerent_kosovo_hubs', ref),
+                              style: const TextStyle(color: Colors.white54, fontSize: 11),
                             ),
                           ],
                         ),
@@ -112,15 +142,15 @@ class PartnerLoginScreen extends HookConsumerWidget {
                     TextFormField(
                       controller: emailController,
                       keyboardType: TextInputType.emailAddress,
-                      decoration: const InputDecoration(
-                        labelText: 'Registered Business Email',
-                        labelStyle: TextStyle(color: Colors.white60, fontSize: 13),
-                        enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
-                        focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF00CEC9))),
-                        prefixIcon: Icon(Icons.email_outlined, color: Colors.white38, size: 18),
+                      decoration: InputDecoration(
+                        labelText: tr('registered_email', ref),
+                        labelStyle: const TextStyle(color: Colors.white60, fontSize: 13),
+                        enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                        focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF00CEC9))),
+                        prefixIcon: const Icon(Icons.email_outlined, color: Colors.white38, size: 18),
                       ),
                       style: const TextStyle(color: Colors.white, fontSize: 15),
-                      validator: (v) => v == null || !v.contains('@') ? 'Enter a valid email address' : null,
+                      validator: (v) => v == null || !v.contains('@') ? tr('enter_valid_email', ref) : null,
                     ),
                     const SizedBox(height: 20),
 
@@ -128,16 +158,16 @@ class PartnerLoginScreen extends HookConsumerWidget {
                     TextFormField(
                       controller: phoneController,
                       keyboardType: TextInputType.phone,
-                      decoration: const InputDecoration(
-                        labelText: 'Registered Contact Phone',
-                        labelStyle: TextStyle(color: Colors.white60, fontSize: 13),
-                        enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
-                        focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF00CEC9))),
-                        prefixIcon: Icon(Icons.phone_outlined, color: Colors.white38, size: 18),
+                      decoration: InputDecoration(
+                        labelText: tr('registered_phone', ref),
+                        labelStyle: const TextStyle(color: Colors.white60, fontSize: 13),
+                        enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                        focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF00CEC9))),
+                        prefixIcon: const Icon(Icons.phone_outlined, color: Colors.white38, size: 18),
                       ),
                       obscureText: true, // Acts as a password for authentication privacy
                       style: const TextStyle(color: Colors.white, fontSize: 15),
-                      validator: (v) => v == null || v.isEmpty ? 'Enter your contact phone number' : null,
+                      validator: (v) => v == null || v.isEmpty ? tr('enter_phone', ref) : null,
                     ),
                     const SizedBox(height: 36),
 
@@ -172,16 +202,16 @@ class PartnerLoginScreen extends HookConsumerWidget {
                                       context.go('/admin');
                                     }
                                   } else {
-                                    errorMessage.value = 'Invalid partner credentials or profile is suspended.';
+                                    errorMessage.value = tr('invalid_credentials', ref);
                                   }
                                   isSubmitting.value = false;
                                 }
                               },
                         child: isSubmitting.value
                             ? const CircularProgressIndicator(color: Colors.white)
-                            : const Text(
-                                'Sign In to Dashboard',
-                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                            : Text(
+                                tr('sign_in', ref),
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                               ),
                       ),
                     ),
@@ -191,9 +221,9 @@ class PartnerLoginScreen extends HookConsumerWidget {
                     Center(
                       child: TextButton(
                         onPressed: () => context.go('/'),
-                        child: const Text(
-                          'Return to Customer App',
-                          style: TextStyle(color: Colors.white54, fontSize: 13),
+                        child: Text(
+                          tr('return_customer_app', ref),
+                          style: const TextStyle(color: Colors.white54, fontSize: 13),
                         ),
                       ),
                     ),
@@ -201,6 +231,38 @@ class PartnerLoginScreen extends HookConsumerWidget {
                 ),
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LangBtn extends StatelessWidget {
+  final String label;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  const _LangBtn({required this.label, required this.isActive, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: isActive ? const Color(0xFF6C5CE7) : Colors.white.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: isActive ? const Color(0xFF6C5CE7) : Colors.white.withOpacity(0.12)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isActive ? Colors.white : Colors.white60,
+            fontWeight: FontWeight.bold,
+            fontSize: 12,
           ),
         ),
       ),

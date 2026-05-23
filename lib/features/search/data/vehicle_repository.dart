@@ -1,5 +1,7 @@
+import 'dart:typed_data';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 import '../domain/vehicle.dart';
 import '../domain/location.dart';
 import '../../bookings/data/booking_repository.dart';
@@ -17,7 +19,7 @@ class VehicleRepository {
       final response = await _supabase.from('locations').select();
       final list = response as List;
       return list.map((json) => Location.fromJson(json)).toList();
-    } catch (_) {
+    } catch (e) {
       // Premium Mock fallback data for offline/standalone execution
       return [
         Location(
@@ -121,114 +123,93 @@ class VehicleRepository {
     }
   }
 
+  /// Upload a vehicle image to Supabase Storage and return its public URL
+  Future<String> uploadVehicleImage({
+    required Uint8List fileBytes,
+    required String fileName,
+  }) async {
+    final ext = fileName.split('.').last;
+    final path = 'vehicles/${const Uuid().v4()}.$ext';
+
+    await _supabase.storage.from('vehicle-images').uploadBinary(
+      path,
+      fileBytes,
+      fileOptions: FileOptions(
+        contentType: 'image/$ext',
+        upsert: true,
+      ),
+    );
+
+    return _supabase.storage.from('vehicle-images').getPublicUrl(path);
+  }
+
   /// Add a new vehicle to the Supabase database
   Future<Vehicle> addVehicle(Vehicle vehicle) async {
-    try {
-      final response = await _supabase
-          .from('vehicles')
-          .insert({
-            'brand': vehicle.brand,
-            'model': vehicle.model,
-            'year': vehicle.year,
-            'transmission': vehicle.transmission,
-            'fuel_type': vehicle.fuelType,
-            'has_ac': vehicle.hasAc,
-            'price_per_day': vehicle.pricePerDay,
-            'image_url': vehicle.imageUrl,
-            'location_id': vehicle.locationId,
-            'partner_id': vehicle.partnerId,
-          })
-          .select()
-          .single();
-      return Vehicle.fromJson(response);
-    } catch (e) {
-      if (e.toString().contains('placeholder')) {
-        return vehicle;
-      }
-      rethrow;
-    }
+    final response = await _supabase
+        .from('vehicles')
+        .insert({
+          'brand': vehicle.brand,
+          'model': vehicle.model,
+          'year': vehicle.year,
+          'transmission': vehicle.transmission,
+          'fuel_type': vehicle.fuelType,
+          'has_ac': vehicle.hasAc,
+          'price_per_day': vehicle.pricePerDay,
+          'image_url': vehicle.imageUrl,
+          'image_urls': vehicle.imageUrls,
+          'location_id': vehicle.locationId,
+          'partner_id': vehicle.partnerId,
+        })
+        .select()
+        .single();
+    return Vehicle.fromJson(response);
   }
 
   /// Update vehicle daily price rate
   Future<void> updateVehicleRate(String vehicleId, double newRate) async {
-    try {
-      await _supabase
-          .from('vehicles')
-          .update({'price_per_day': newRate})
-          .eq('id', vehicleId);
-    } catch (e) {
-      if (e.toString().contains('placeholder')) {
-        return;
-      }
-      rethrow;
-    }
+    await _supabase
+        .from('vehicles')
+        .update({'price_per_day': newRate})
+        .eq('id', vehicleId);
   }
 
   /// Update vehicle location hub
   Future<void> updateVehicleLocation(String vehicleId, String newLocationId) async {
-    try {
-      await _supabase
-          .from('vehicles')
-          .update({'location_id': newLocationId})
-          .eq('id', vehicleId);
-    } catch (e) {
-      if (e.toString().contains('placeholder')) {
-        return;
-      }
-      rethrow;
-    }
+    await _supabase
+        .from('vehicles')
+        .update({'location_id': newLocationId})
+        .eq('id', vehicleId);
   }
 
   /// Delete a vehicle from the fleet
   Future<void> deleteVehicle(String vehicleId) async {
-    try {
-      await _supabase
-          .from('vehicles')
-          .delete()
-          .eq('id', vehicleId);
-    } catch (e) {
-      if (e.toString().contains('placeholder')) {
-        return;
-      }
-      rethrow;
-    }
+    await _supabase
+        .from('vehicles')
+        .delete()
+        .eq('id', vehicleId);
   }
 
   /// Add a new location hub
   Future<Location> addLocation(Location location) async {
-    try {
-      final response = await _supabase
-          .from('locations')
-          .insert({
-            'name_en': location.nameEn,
-            'name_sq': location.nameSq,
-            'name_sr': location.nameSr,
-            'code': location.code,
-          })
-          .select()
-          .single();
-      return Location.fromJson(response);
-    } catch (e) {
-      if (e.toString().contains('placeholder')) {
-        return location;
-      }
-      rethrow;
-    }
+    final response = await _supabase
+        .from('locations')
+        .insert({
+          'name_en': location.nameEn,
+          'name_sq': location.nameSq,
+          'name_sr': location.nameSr,
+          'code': location.code,
+        })
+        .select()
+        .single();
+    return Location.fromJson(response);
   }
 
   /// Delete a location hub
   Future<void> deleteLocation(String locationId) async {
-    try {
-      await _supabase
-          .from('locations')
-          .delete()
-          .eq('id', locationId);
-    } catch (e) {
-      if (e.toString().contains('placeholder')) {
-        return;
-      }
-      rethrow;
-    }
+    await _supabase
+        .from('locations')
+        .delete()
+        .eq('id', locationId);
   }
 }
 

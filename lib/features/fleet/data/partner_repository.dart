@@ -219,4 +219,15 @@ Future<List<Partner>> partnersList(PartnersListRef ref) {
 final currentPartnerProvider = StateProvider<Partner?>((ref) => null);
 final isAdminProvider = StateProvider<bool>((ref) => false);
 
+@riverpod
+Future<Partner?> partnerDetails(PartnerDetailsRef ref, String id) async {
+  final supabase = ref.watch(supabaseClientProvider);
+  try {
+    final response = await supabase.from('partners').select().eq('id', id).single();
+    return Partner.fromJson(response);
+  } catch (e) {
+    return null;
+  }
+}
+
 

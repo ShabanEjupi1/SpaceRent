@@ -6,6 +6,7 @@ import '../../bookings/data/booking_repository.dart';
 import '../data/vehicle_repository.dart';
 import '../domain/vehicle.dart';
 import 'home_search_screen.dart';
+import 'widgets/checkout_overlay.dart';
 
 class CarDetailsScreen extends ConsumerWidget {
   final String carId;
@@ -469,52 +470,28 @@ class CarDetailsScreen extends ConsumerWidget {
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
-                  onPressed: isSaving.value
-                      ? null
-                      : () async {
-                          if (formKey.currentState!.validate()) {
-                            setState(() {
-                              isSaving.value = true;
-                            });
-
-                            final success = await ref
-                                .read(bookingControllerProvider.notifier)
-                                .bookVehicle(
-                                  vehicleId: vehicle.id,
-                                  startDate: start,
-                                  endDate: end,
-                                  totalPrice: totalPrice,
-                                  fullName: nameController.text.trim(),
-                                  phoneNumber: phoneController.text.trim(),
-                                  emailAddress: emailController.text.trim(),
-                                );
-
-                            setState(() {
-                              isSaving.value = false;
-                            });
-
-                            if (context.mounted) {
-                              if (success) {
-                                Navigator.of(context).pop(); // Dismiss Form Dialog
-                                _showSuccessDialog(context, t);
-                              } else {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    backgroundColor: Colors.red[800],
-                                    content: Text(t['errorMsg']!),
-                                  ),
-                                );
-                              }
-                            }
-                          }
-                        },
-                  child: isSaving.value
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                        )
-                      : const Text('Confirm Booking', style: TextStyle(fontWeight: FontWeight.bold)),
+                  onPressed: () {
+                    if (formKey.currentState!.validate()) {
+                      Navigator.of(context).pop(); // Dismiss Form Dialog
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (context) => CheckoutOverlay(
+                          vehicle: vehicle,
+                          startDate: start,
+                          endDate: end,
+                          totalPrice: totalPrice,
+                          fullName: nameController.text.trim(),
+                          phoneNumber: phoneController.text.trim(),
+                          emailAddress: emailController.text.trim(),
+                          onSuccess: () {
+                            _showSuccessDialog(context, t);
+                          },
+                        ),
+                      );
+                    }
+                  },
+                  child: const Text('Proceed to Payment', style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ],
             );

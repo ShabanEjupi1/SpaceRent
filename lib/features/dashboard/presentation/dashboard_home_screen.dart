@@ -4,6 +4,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/l10n/locale_provider.dart';
 import '../../bookings/data/admin_booking_repository.dart';
 import '../../bookings/data/booking_repository.dart';
 import '../../bookings/domain/booking.dart';
@@ -12,6 +13,7 @@ import '../../fleet/data/profile_repository.dart';
 import '../../fleet/domain/partner.dart';
 import '../../fleet/domain/profile.dart';
 import '../../fleet/presentation/widgets/add_car_dialog.dart';
+import '../../notifications/email_service.dart';
 import '../../search/data/vehicle_repository.dart';
 import '../../search/domain/location.dart';
 import '../../search/domain/vehicle.dart';
@@ -64,9 +66,9 @@ class DashboardHomeScreen extends HookConsumerWidget {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'SpaceRent',
-                        style: TextStyle(
+                      Text(
+                        tr('brand_name', ref),
+                        style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
                           color: Color(0xFF00CEC9),
@@ -75,7 +77,7 @@ class DashboardHomeScreen extends HookConsumerWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        isUserAdmin ? 'KOSOVO MISSION CONTROL' : 'PARTNER OPERATIONS DASHBOARD',
+                        isUserAdmin ? tr('admin_subtitle', ref) : tr('partner_subtitle', ref),
                         style: const TextStyle(
                           fontSize: 28,
                           fontWeight: FontWeight.bold,
@@ -86,8 +88,8 @@ class DashboardHomeScreen extends HookConsumerWidget {
                       const SizedBox(height: 4),
                       Text(
                         isUserAdmin
-                            ? 'Realtime administrator overview across Kosovo hubs'
-                            : 'Manage fleet and bookings for ${partner.companyName}',
+                            ? tr('admin_overview', ref)
+                            : '${tr('partner_overview', ref)} ${partner.companyName}',
                         style: const TextStyle(color: Colors.white54, fontSize: 13),
                       ),
                     ],
@@ -106,7 +108,7 @@ class DashboardHomeScreen extends HookConsumerWidget {
                       );
                     },
                     icon: const Icon(Icons.add, size: 18),
-                    label: const Text('Add Vehicle', style: TextStyle(fontWeight: FontWeight.bold)),
+                    label: Text(tr('add_vehicle', ref), style: const TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
@@ -118,6 +120,7 @@ class DashboardHomeScreen extends HookConsumerWidget {
             padding: const EdgeInsets.symmetric(horizontal: 24.0),
             sliver: SliverToBoxAdapter(
               child: _buildStatsGrid(
+                ref: ref,
                 isUserAdmin: isUserAdmin,
                 partner: partner,
                 bookingsAsync: liveBookingsAsync,
@@ -143,7 +146,7 @@ class DashboardHomeScreen extends HookConsumerWidget {
                   const SizedBox(height: 24),
 
                   // 3. Support Requests
-                  _buildSupportRequestsSection(context, supportRequests),
+                  _buildSupportRequestsSection(context, ref, supportRequests),
                   const SizedBox(height: 24),
 
                   // 4. Locations Hubs Management
@@ -172,6 +175,7 @@ class DashboardHomeScreen extends HookConsumerWidget {
 
   // --- 1. Statistics Grid UI Builder ---
   Widget _buildStatsGrid({
+    required WidgetRef ref,
     required bool isUserAdmin,
     required Partner? partner,
     required AsyncValue<List<Booking>> bookingsAsync,
@@ -202,7 +206,7 @@ class DashboardHomeScreen extends HookConsumerWidget {
 
         final items = [
           _StatCard(
-            title: 'TOTAL BOOKINGS',
+            title: tr('total_bookings', ref),
             value: '$totalBookings',
             icon: Icons.assignment_turned_in_outlined,
             color: const Color(0xFF6C5CE7),
@@ -210,14 +214,14 @@ class DashboardHomeScreen extends HookConsumerWidget {
           ),
           if (isUserAdmin) ...[
             _StatCard(
-              title: 'PENDING PARTNERS',
+              title: tr('pending_partners', ref),
               value: '$pendingPartners',
               icon: Icons.handshake_outlined,
               color: Colors.amber,
               width: width,
             ),
             _StatCard(
-              title: 'ACTIVE PARTNERS',
+              title: tr('active_partners_label', ref),
               value: '$activePartners',
               icon: Icons.people_outline,
               color: const Color(0xFF00CEC9),
@@ -225,7 +229,7 @@ class DashboardHomeScreen extends HookConsumerWidget {
             ),
           ],
           _StatCard(
-            title: 'TOTAL FLEET',
+            title: tr('total_fleet', ref),
             value: '$totalFleet',
             icon: Icons.directions_car_outlined,
             color: Colors.green,
@@ -249,18 +253,18 @@ class DashboardHomeScreen extends HookConsumerWidget {
     AsyncValue<List<PartnerApplication>> applicationsAsync,
   ) {
     return _SectionCard(
-      title: 'Partner Comm-Links (Pending Applications)',
+      title: tr('partner_comm_links', ref),
       icon: Icons.connect_without_contact,
       child: applicationsAsync.when(
         data: (apps) {
           final pending = apps.where((a) => a.status == 'Pending').toList();
           if (pending.isEmpty) {
-            return const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20.0),
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20.0),
               child: Center(
                 child: Text(
-                  'No pending partner applications.',
-                  style: TextStyle(color: Colors.white30, fontSize: 13),
+                  tr('no_pending_apps', ref),
+                  style: const TextStyle(color: Colors.white30, fontSize: 13),
                 ),
               ),
             );
@@ -287,11 +291,41 @@ class DashboardHomeScreen extends HookConsumerWidget {
                       ),
                       onPressed: () async {
                         final inviteToken = const Uuid().v4();
-                        await ref.read(partnerRepositoryProvider).approveApplication(app.id, inviteToken);
-                        ref.invalidate(partnerApplicationsListProvider);
-                        ref.invalidate(partnersListProvider);
+                        try {
+                          await ref.read(partnerRepositoryProvider).approveApplication(app.id, inviteToken);
+
+                          // Send partner invite email
+                          final emailService = EmailService(ref.read(supabaseClientProvider));
+                          await emailService.sendPartnerInviteEmail(
+                            toEmail: app.email,
+                            companyName: app.companyName,
+                            contactName: app.contactName,
+                            inviteToken: inviteToken,
+                          );
+
+                          ref.invalidate(partnerApplicationsListProvider);
+                          ref.invalidate(partnersListProvider);
+
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                backgroundColor: const Color(0xFF00CEC9),
+                                content: Text('Approved! Invite email sent to ${app.email}'),
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                backgroundColor: Colors.redAccent,
+                                content: Text('Error: $e'),
+                              ),
+                            );
+                          }
+                        }
                       },
-                      child: const Text('Approve'),
+                      child: Text(tr('approve', ref)),
                     ),
                   ],
                 ),
@@ -312,15 +346,15 @@ class DashboardHomeScreen extends HookConsumerWidget {
     AsyncValue<List<Partner>> partnersAsync,
   ) {
     return _SectionCard(
-      title: 'Active Partners',
+      title: tr('active_partners', ref),
       icon: Icons.handshake,
       child: partnersAsync.when(
         data: (partners) {
           if (partners.isEmpty) {
-            return const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20.0),
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20.0),
               child: Center(
-                child: Text('No active partners.', style: TextStyle(color: Colors.white30, fontSize: 13)),
+                child: Text(tr('no_active_partners', ref), style: const TextStyle(color: Colors.white30, fontSize: 13)),
               ),
             );
           }
@@ -355,16 +389,28 @@ class DashboardHomeScreen extends HookConsumerWidget {
                         size: 20,
                       ),
                       onPressed: () async {
-                        final newStatus = isSuspended ? 'Active' : 'Suspended';
-                        await ref.read(partnerRepositoryProvider).updatePartnerStatus(p.id, newStatus);
-                        ref.invalidate(partnersListProvider);
+                        try {
+                          final newStatus = isSuspended ? 'Active' : 'Suspended';
+                          await ref.read(partnerRepositoryProvider).updatePartnerStatus(p.id, newStatus);
+                          ref.invalidate(partnersListProvider);
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('Error: $e')));
+                          }
+                        }
                       },
                     ),
                     IconButton(
                       icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
                       onPressed: () async {
-                        await ref.read(partnerRepositoryProvider).deletePartner(p.id);
-                        ref.invalidate(partnersListProvider);
+                        try {
+                          await ref.read(partnerRepositoryProvider).deletePartner(p.id);
+                          ref.invalidate(partnersListProvider);
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('Error: $e')));
+                          }
+                        }
                       },
                     ),
                   ],
@@ -382,17 +428,18 @@ class DashboardHomeScreen extends HookConsumerWidget {
   // --- 4. Support Requests ---
   Widget _buildSupportRequestsSection(
     BuildContext context,
+    WidgetRef ref,
     ValueNotifier<List<Map<String, String>>> supportRequests,
   ) {
     final list = supportRequests.value;
     return _SectionCard(
-      title: 'Partner Support Requests (${list.length})',
+      title: '${tr('support_requests', ref)} (${list.length})',
       icon: Icons.contact_support_outlined,
       child: list.isEmpty
-          ? const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20.0),
+          ? Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20.0),
               child: Center(
-                child: Text('No pending support requests.', style: TextStyle(color: Colors.white30, fontSize: 13)),
+                child: Text(tr('no_support_requests', ref), style: const TextStyle(color: Colors.white30, fontSize: 13)),
               ),
             )
           : ListView.separated(
@@ -427,6 +474,7 @@ class DashboardHomeScreen extends HookConsumerWidget {
                           icon: const Icon(Icons.check_circle_outline, color: Colors.greenAccent, size: 20),
                           onPressed: () {
                             final newList = List<Map<String, String>>.from(supportRequests.value);
+                            newList[index] = Map<String, String>.from(newList[index]);
                             newList[index]['status'] = 'Resolved';
                             supportRequests.value = newList;
                           },
@@ -453,102 +501,16 @@ class DashboardHomeScreen extends HookConsumerWidget {
     WidgetRef ref,
     AsyncValue<List<Location>> locationsAsync,
   ) {
-    final codeController = useTextEditingController();
-    final nameEnController = useTextEditingController();
-    final nameSqController = useTextEditingController();
-    final nameSrController = useTextEditingController();
+    final lang = ref.watch(localeProvider);
 
     return _SectionCard(
-      title: 'Locations Management',
+      title: tr('locations_management', ref),
       icon: Icons.map_outlined,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Inline Add Form
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(
-                flex: 1,
-                child: TextField(
-                  controller: codeController,
-                  style: const TextStyle(color: Colors.white, fontSize: 13),
-                  decoration: const InputDecoration(
-                    labelText: 'ID (e.g. PRN)',
-                    labelStyle: TextStyle(color: Colors.white60, fontSize: 11),
-                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 3,
-                child: TextField(
-                  controller: nameEnController,
-                  style: const TextStyle(color: Colors.white, fontSize: 13),
-                  decoration: const InputDecoration(
-                    labelText: 'Location Name (EN)',
-                    labelStyle: TextStyle(color: Colors.white60, fontSize: 11),
-                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00CEC9),
-                  foregroundColor: Colors.black,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                onPressed: () async {
-                  final code = codeController.text.trim();
-                  final nameEn = nameEnController.text.trim();
-                  if (code.isNotEmpty && nameEn.isNotEmpty) {
-                    final newLoc = Location(
-                      id: '',
-                      code: code,
-                      nameEn: nameEn,
-                      nameSq: nameSqController.text.isNotEmpty ? nameSqController.text.trim() : nameEn,
-                      nameSr: nameSrController.text.isNotEmpty ? nameSrController.text.trim() : nameEn,
-                    );
-                    await ref.read(vehicleRepositoryProvider).addLocation(newLoc);
-                    ref.invalidate(locationsProvider);
-                    codeController.clear();
-                    nameEnController.clear();
-                    nameSqController.clear();
-                    nameSrController.clear();
-                  }
-                },
-                child: const Text('Add', style: TextStyle(fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          // Additional language fields collapsible or minor
-          ExpansionTile(
-            title: const Text('Add Translations (Optional)', style: TextStyle(color: Colors.white54, fontSize: 12)),
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: nameSqController,
-                      style: const TextStyle(color: Colors.white, fontSize: 13),
-                      decoration: const InputDecoration(labelText: 'Name (SQ)', labelStyle: TextStyle(color: Colors.white54)),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextField(
-                      controller: nameSrController,
-                      style: const TextStyle(color: Colors.white, fontSize: 13),
-                      decoration: const InputDecoration(labelText: 'Name (SR)', labelStyle: TextStyle(color: Colors.white54)),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+          _LocationAddForm(ref: ref),
           const SizedBox(height: 12),
 
           // Locations List
@@ -561,14 +523,21 @@ class DashboardHomeScreen extends HookConsumerWidget {
                 separatorBuilder: (c, i) => const Divider(color: Colors.white10),
                 itemBuilder: (context, index) {
                   final loc = locs[index];
+                  final displayName = loc.getLocalizedName(lang);
                   return ListTile(
-                    title: Text('${loc.nameEn} (${loc.code})', style: const TextStyle(color: Colors.white, fontSize: 14)),
-                    subtitle: Text('Code: ${loc.code} | SQ: ${loc.nameSq}', style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                    title: Text('$displayName (${loc.code})', style: const TextStyle(color: Colors.white, fontSize: 14)),
+                    subtitle: Text('Code: ${loc.code}', style: const TextStyle(color: Colors.white54, fontSize: 11)),
                     trailing: IconButton(
                       icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),
                       onPressed: () async {
-                        await ref.read(vehicleRepositoryProvider).deleteLocation(loc.id);
-                        ref.invalidate(locationsProvider);
+                        try {
+                          await ref.read(vehicleRepositoryProvider).deleteLocation(loc.id);
+                          ref.invalidate(locationsProvider);
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('Error: $e')));
+                          }
+                        }
                       },
                     ),
                   );
@@ -590,7 +559,7 @@ class DashboardHomeScreen extends HookConsumerWidget {
     AsyncValue<List<Profile>> profilesAsync,
   ) {
     return _SectionCard(
-      title: 'User Management',
+      title: tr('user_management', ref),
       icon: Icons.person_outline,
       child: profilesAsync.when(
         data: (profiles) {
@@ -603,7 +572,7 @@ class DashboardHomeScreen extends HookConsumerWidget {
               final profile = profiles[index];
               return ListTile(
                 title: Text(profile.email, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-                subtitle: Text('ID: ${profile.id} | Role: ${profile.role}', style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                subtitle: Text('ID: ${profile.id}', style: const TextStyle(color: Colors.white54, fontSize: 11)),
                 trailing: DropdownButton<String>(
                   dropdownColor: const Color(0xFF16162B),
                   underline: const SizedBox(),
@@ -617,8 +586,14 @@ class DashboardHomeScreen extends HookConsumerWidget {
                   }).toList(),
                   onChanged: (newRole) async {
                     if (newRole != null) {
-                      await ref.read(profileRepositoryProvider).updateProfileRole(profile.id, newRole);
-                      ref.invalidate(profilesListProvider);
+                      try {
+                        await ref.read(profileRepositoryProvider).updateProfileRole(profile.id, newRole);
+                        ref.invalidate(profilesListProvider);
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('Error: $e')));
+                        }
+                      }
                     }
                   },
                 ),
@@ -640,13 +615,14 @@ class DashboardHomeScreen extends HookConsumerWidget {
     AsyncValue<List<Location>> locationsAsync,
     Partner? partner,
   ) {
+    final lang = ref.watch(localeProvider);
     final locationMap = locationsAsync.maybeWhen(
-      data: (list) => {for (var loc in list) loc.id: loc.nameEn},
+      data: (list) => {for (var loc in list) loc.id: loc.getLocalizedName(lang)},
       orElse: () => <String, String>{},
     );
 
     return _SectionCard(
-      title: 'Fleet Management',
+      title: tr('fleet_management', ref),
       icon: Icons.directions_car_outlined,
       child: vehiclesAsync.when(
         data: (vehicles) {
@@ -655,7 +631,7 @@ class DashboardHomeScreen extends HookConsumerWidget {
               : vehicles.where((v) => v.partnerId == partner.id).toList();
 
           if (displayVehicles.isEmpty) {
-            return const Center(child: Text('No vehicles in fleet.', style: TextStyle(color: Colors.white38)));
+            return Center(child: Text(tr('no_vehicles', ref), style: const TextStyle(color: Colors.white38)));
           }
 
           return SingleChildScrollView(
@@ -663,13 +639,13 @@ class DashboardHomeScreen extends HookConsumerWidget {
             child: DataTable(
               columnSpacing: 20,
               headingTextStyle: const TextStyle(color: Color(0xFF00CEC9), fontWeight: FontWeight.bold, fontSize: 13),
-              columns: const [
-                DataColumn(label: Text('Vehicle Details')),
-                DataColumn(label: Text('Transmission')),
-                DataColumn(label: Text('Fuel')),
-                DataColumn(label: Text('Hub Location')),
-                DataColumn(label: Text('Daily Rate')),
-                DataColumn(label: Text('Actions')),
+              columns: [
+                DataColumn(label: Text(tr('vehicle_details', ref))),
+                DataColumn(label: Text(tr('transmission', ref))),
+                DataColumn(label: Text(tr('fuel', ref))),
+                DataColumn(label: Text(tr('hub_location', ref))),
+                DataColumn(label: Text(tr('daily_rate', ref))),
+                DataColumn(label: Text(tr('actions', ref))),
               ],
               rows: displayVehicles.map((vehicle) {
                 return DataRow(
@@ -693,7 +669,7 @@ class DashboardHomeScreen extends HookConsumerWidget {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text('${vehicle.brand} ${vehicle.model}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                              Text('ID: ${vehicle.id}', style: const TextStyle(color: Colors.white38, fontSize: 9)),
+                              Text('ID: ${vehicle.id.substring(0, 8)}...', style: const TextStyle(color: Colors.white38, fontSize: 9)),
                             ],
                           ),
                         ],
@@ -704,7 +680,7 @@ class DashboardHomeScreen extends HookConsumerWidget {
                     DataCell(
                       Row(
                         children: [
-                          Text(locationMap[vehicle.locationId] ?? 'Unknown Hub', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                          Text(locationMap[vehicle.locationId] ?? 'Unknown', style: const TextStyle(color: Colors.white70, fontSize: 12)),
                           IconButton(
                             icon: const Icon(Icons.edit, size: 13, color: Colors.white38),
                             onPressed: () => _showEditLocationDialog(context, ref, vehicle, locationsAsync.value ?? []),
@@ -755,7 +731,7 @@ class DashboardHomeScreen extends HookConsumerWidget {
     );
 
     return _SectionCard(
-      title: 'Recent Bookings For My Vehicles',
+      title: tr('recent_bookings', ref),
       icon: Icons.calendar_month_outlined,
       action: ElevatedButton.icon(
         style: ElevatedButton.styleFrom(
@@ -768,7 +744,7 @@ class DashboardHomeScreen extends HookConsumerWidget {
           _showManualBookingDialog(context, ref, vehiclesAsync.value ?? [], partner);
         },
         icon: const Icon(Icons.add, size: 14, color: Colors.black),
-        label: const Text('Add Booking', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+        label: Text(tr('add_booking', ref), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
       ),
       child: bookingsAsync.when(
         data: (bookings) {
@@ -780,10 +756,10 @@ class DashboardHomeScreen extends HookConsumerWidget {
           final filteredBookings = bookings.where((b) => displayVehiclesIds.contains(b.vehicleId)).toList();
 
           if (filteredBookings.isEmpty) {
-            return const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20.0),
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20.0),
               child: Center(
-                child: Text('No recent bookings registered.', style: TextStyle(color: Colors.white30, fontSize: 13)),
+                child: Text(tr('no_bookings', ref), style: const TextStyle(color: Colors.white30, fontSize: 13)),
               ),
             );
           }
@@ -822,7 +798,7 @@ class DashboardHomeScreen extends HookConsumerWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Customer: ${booking.fullName ?? "Guest"} • ${booking.phoneNumber ?? "N/A"}',
+                            '${tr('customer', ref)}: ${booking.fullName ?? "Guest"} • ${booking.phoneNumber ?? "N/A"}',
                             style: const TextStyle(color: Colors.white70, fontSize: 11),
                           ),
                           Text(
@@ -862,10 +838,31 @@ class DashboardHomeScreen extends HookConsumerWidget {
                             color: const Color(0xFF16162B),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                             onSelected: (newStatus) async {
-                              await ref
-                                  .read(adminBookingRepositoryProvider)
-                                  .updateBookingStatus(booking.id, newStatus);
-                              ref.invalidate(liveBookingsListProvider);
+                              try {
+                                await ref
+                                    .read(adminBookingRepositoryProvider)
+                                    .updateBookingStatus(booking.id, newStatus);
+
+                                ref.invalidate(liveBookingsListProvider);
+
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      backgroundColor: const Color(0xFF00CEC9),
+                                      content: Text('Booking status updated to $newStatus'),
+                                    ),
+                                  );
+                                }
+                              } catch (e) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      backgroundColor: Colors.redAccent,
+                                      content: Text('Error updating booking: $e'),
+                                    ),
+                                  );
+                                }
+                              }
                             },
                             itemBuilder: (context) => [
                               const PopupMenuItem(value: 'Pending', child: Text('Pending', style: TextStyle(color: Colors.amber, fontSize: 13))),
@@ -896,26 +893,32 @@ class DashboardHomeScreen extends HookConsumerWidget {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF16162B),
-        title: Text('Edit Rate for ${vehicle.brand} ${vehicle.model}', style: const TextStyle(color: Colors.white)),
+        title: Text('${tr('edit_rate_for', ref)} ${vehicle.brand} ${vehicle.model}', style: const TextStyle(color: Colors.white)),
         content: TextField(
           controller: controller,
           keyboardType: TextInputType.number,
           style: const TextStyle(color: Colors.white),
-          decoration: const InputDecoration(labelText: 'New Daily Rate (€)', labelStyle: TextStyle(color: Colors.white60)),
+          decoration: InputDecoration(labelText: tr('new_daily_rate', ref), labelStyle: const TextStyle(color: Colors.white60)),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(tr('cancel', ref))),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00CEC9)),
             onPressed: () async {
               final newRate = double.tryParse(controller.text.trim());
               if (newRate != null) {
-                await ref.read(vehicleRepositoryProvider).updateVehicleRate(vehicle.id, newRate);
-                ref.invalidate(vehiclesListProvider);
-                if (context.mounted) Navigator.of(context).pop();
+                try {
+                  await ref.read(vehicleRepositoryProvider).updateVehicleRate(vehicle.id, newRate);
+                  ref.invalidate(vehiclesListProvider);
+                  if (context.mounted) Navigator.of(context).pop();
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('Error: $e')));
+                  }
+                }
               }
             },
-            child: const Text('Save'),
+            child: Text(tr('save', ref)),
           ),
         ],
       ),
@@ -929,7 +932,7 @@ class DashboardHomeScreen extends HookConsumerWidget {
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
           backgroundColor: const Color(0xFF16162B),
-          title: Text('Move ${vehicle.brand}', style: const TextStyle(color: Colors.white)),
+          title: Text('${tr('move', ref)} ${vehicle.brand}', style: const TextStyle(color: Colors.white)),
           content: DropdownButtonFormField<Location>(
             dropdownColor: const Color(0xFF16162B),
             value: selected,
@@ -937,17 +940,23 @@ class DashboardHomeScreen extends HookConsumerWidget {
             onChanged: (v) => setState(() => selected = v),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(tr('cancel', ref))),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00CEC9)),
               onPressed: () async {
                 if (selected != null) {
-                  await ref.read(vehicleRepositoryProvider).updateVehicleLocation(vehicle.id, selected!.id);
-                  ref.invalidate(vehiclesListProvider);
-                  if (context.mounted) Navigator.of(context).pop();
+                  try {
+                    await ref.read(vehicleRepositoryProvider).updateVehicleLocation(vehicle.id, selected!.id);
+                    ref.invalidate(vehiclesListProvider);
+                    if (context.mounted) Navigator.of(context).pop();
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('Error: $e')));
+                    }
+                  }
                 }
               },
-              child: const Text('Save'),
+              child: Text(tr('save', ref)),
             ),
           ],
         ),
@@ -960,18 +969,24 @@ class DashboardHomeScreen extends HookConsumerWidget {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF16162B),
-        title: const Text('Delete Vehicle', style: TextStyle(color: Colors.white)),
-        content: Text('Remove ${vehicle.brand} ${vehicle.model} permanently?', style: const TextStyle(color: Colors.white70)),
+        title: Text(tr('delete_vehicle', ref), style: const TextStyle(color: Colors.white)),
+        content: Text('${vehicle.brand} ${vehicle.model} — ${tr('remove_permanently', ref)}', style: const TextStyle(color: Colors.white70)),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(tr('cancel', ref))),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () async {
-              await ref.read(vehicleRepositoryProvider).deleteVehicle(vehicle.id);
-              ref.invalidate(vehiclesListProvider);
-              if (context.mounted) Navigator.of(context).pop();
+              try {
+                await ref.read(vehicleRepositoryProvider).deleteVehicle(vehicle.id);
+                ref.invalidate(vehiclesListProvider);
+                if (context.mounted) Navigator.of(context).pop();
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('Error: $e')));
+                }
+              }
             },
-            child: const Text('Delete'),
+            child: Text(tr('delete', ref)),
           ),
         ],
       ),
@@ -1003,7 +1018,7 @@ class DashboardHomeScreen extends HookConsumerWidget {
           return AlertDialog(
             backgroundColor: const Color(0xFF16162B),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: const Text('Add Booking Manually', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            title: Text(tr('add_booking_manually', ref), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             content: SizedBox(
               width: 480,
               child: SingleChildScrollView(
@@ -1016,7 +1031,7 @@ class DashboardHomeScreen extends HookConsumerWidget {
                       DropdownButtonFormField<Vehicle>(
                         dropdownColor: const Color(0xFF16162B),
                         value: selectedVehicle,
-                        decoration: const InputDecoration(labelText: 'Select Vehicle', labelStyle: TextStyle(color: Colors.white60)),
+                        decoration: InputDecoration(labelText: tr('select_vehicle', ref), labelStyle: const TextStyle(color: Colors.white60)),
                         items: displayVehicles.map((v) {
                           return DropdownMenuItem(value: v, child: Text('${v.brand} ${v.model} (${v.year})', style: const TextStyle(color: Colors.white)));
                         }).toList(),
@@ -1033,22 +1048,22 @@ class DashboardHomeScreen extends HookConsumerWidget {
                       TextFormField(
                         controller: nameController,
                         style: const TextStyle(color: Colors.white),
-                        decoration: const InputDecoration(labelText: 'Customer Full Name', labelStyle: TextStyle(color: Colors.white60)),
-                        validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                        decoration: InputDecoration(labelText: tr('customer_full_name', ref), labelStyle: const TextStyle(color: Colors.white60)),
+                        validator: (v) => v == null || v.isEmpty ? tr('required', ref) : null,
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: phoneController,
                         style: const TextStyle(color: Colors.white),
-                        decoration: const InputDecoration(labelText: 'Phone Number', labelStyle: TextStyle(color: Colors.white60)),
-                        validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                        decoration: InputDecoration(labelText: tr('phone_number', ref), labelStyle: const TextStyle(color: Colors.white60)),
+                        validator: (v) => v == null || v.isEmpty ? tr('required', ref) : null,
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: emailController,
                         style: const TextStyle(color: Colors.white),
-                        decoration: const InputDecoration(labelText: 'Email Address', labelStyle: TextStyle(color: Colors.white60)),
-                        validator: (v) => v == null || !v.contains('@') ? 'Invalid' : null,
+                        decoration: InputDecoration(labelText: tr('email_address', ref), labelStyle: const TextStyle(color: Colors.white60)),
+                        validator: (v) => v == null || !v.contains('@') ? tr('invalid', ref) : null,
                       ),
                       const SizedBox(height: 16),
                       // Dates row
@@ -1058,7 +1073,7 @@ class DashboardHomeScreen extends HookConsumerWidget {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('Start Date', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                              Text(tr('start_date', ref), style: const TextStyle(color: Colors.white54, fontSize: 11)),
                               OutlinedButton(
                                 onPressed: () async {
                                   final d = await showDatePicker(context: context, firstDate: DateTime.now().subtract(const Duration(days: 365)), lastDate: DateTime.now().add(const Duration(days: 365)), initialDate: startDate);
@@ -1071,7 +1086,7 @@ class DashboardHomeScreen extends HookConsumerWidget {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('End Date', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                              Text(tr('end_date', ref), style: const TextStyle(color: Colors.white54, fontSize: 11)),
                               OutlinedButton(
                                 onPressed: () async {
                                   final d = await showDatePicker(context: context, firstDate: startDate.add(const Duration(days: 1)), lastDate: DateTime.now().add(const Duration(days: 365)), initialDate: endDate.isAfter(startDate) ? endDate : startDate.add(const Duration(days: 1)));
@@ -1088,7 +1103,7 @@ class DashboardHomeScreen extends HookConsumerWidget {
                       DropdownButtonFormField<String>(
                         dropdownColor: const Color(0xFF16162B),
                         value: selectedStatus,
-                        decoration: const InputDecoration(labelText: 'Status', labelStyle: TextStyle(color: Colors.white60)),
+                        decoration: InputDecoration(labelText: tr('status', ref), labelStyle: const TextStyle(color: Colors.white60)),
                         items: ['Pending', 'Confirmed', 'Cancelled', 'Rejected'].map((status) {
                           return DropdownMenuItem(value: status, child: Text(status, style: const TextStyle(color: Colors.white)));
                         }).toList(),
@@ -1099,7 +1114,7 @@ class DashboardHomeScreen extends HookConsumerWidget {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('Calculated Total ($days days):', style: const TextStyle(color: Colors.white60, fontSize: 12)),
+                          Text('${tr('calculated_total', ref)} ($days ${tr('days', ref)}):', style: const TextStyle(color: Colors.white60, fontSize: 12)),
                           Text('€${total.toStringAsFixed(0)}', style: const TextStyle(color: Color(0xFF00CEC9), fontWeight: FontWeight.bold, fontSize: 18)),
                         ],
                       ),
@@ -1109,34 +1124,133 @@ class DashboardHomeScreen extends HookConsumerWidget {
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+              TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(tr('cancel', ref))),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C5CE7)),
                 onPressed: () async {
                   if (formKey.currentState!.validate() && selectedVehicle != null) {
-                    final manualBooking = Booking(
-                      id: const Uuid().v4(),
-                      vehicleId: selectedVehicle!.id,
-                      userId: const Uuid().v4(),
-                      startDate: startDate,
-                      endDate: endDate,
-                      totalPrice: total,
-                      status: selectedStatus,
-                      fullName: nameController.text.trim(),
-                      phoneNumber: phoneController.text.trim(),
-                      emailAddress: emailController.text.trim(),
-                    );
-                    await ref.read(bookingRepositoryProvider).submitBooking(manualBooking);
-                    ref.invalidate(liveBookingsListProvider);
-                    if (context.mounted) Navigator.of(context).pop();
+                    try {
+                      final manualBooking = Booking(
+                        id: const Uuid().v4(),
+                        vehicleId: selectedVehicle!.id,
+                        userId: const Uuid().v4(),
+                        startDate: startDate,
+                        endDate: endDate,
+                        totalPrice: total,
+                        status: selectedStatus,
+                        fullName: nameController.text.trim(),
+                        phoneNumber: phoneController.text.trim(),
+                        emailAddress: emailController.text.trim(),
+                        language: ref.read(localeProvider),
+                      );
+                      await ref.read(bookingRepositoryProvider).submitBooking(manualBooking);
+                      ref.invalidate(liveBookingsListProvider);
+                      if (context.mounted) Navigator.of(context).pop();
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('Error: $e')));
+                      }
+                    }
                   }
                 },
-                child: const Text('Add Booking'),
+                child: Text(tr('add_booking', ref)),
               ),
             ],
           );
         },
       ),
+    );
+  }
+}
+
+// --- Location Add Form (extracted because it needs hooks) ---
+class _LocationAddForm extends HookConsumerWidget {
+  final WidgetRef ref;
+  const _LocationAddForm({required this.ref});
+
+  @override
+  Widget build(BuildContext context, WidgetRef widgetRef) {
+    final codeController = useTextEditingController();
+    final nameEnController = useTextEditingController();
+    final nameSqController = useTextEditingController();
+
+    return Column(
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
+              flex: 1,
+              child: TextField(
+                controller: codeController,
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+                decoration: InputDecoration(
+                  labelText: tr('id_label', widgetRef),
+                  labelStyle: const TextStyle(color: Colors.white60, fontSize: 11),
+                  enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 3,
+              child: TextField(
+                controller: nameEnController,
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+                decoration: InputDecoration(
+                  labelText: tr('location_name_en', widgetRef),
+                  labelStyle: const TextStyle(color: Colors.white60, fontSize: 11),
+                  enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00CEC9),
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () async {
+                final code = codeController.text.trim();
+                final nameEn = nameEnController.text.trim();
+                if (code.isNotEmpty && nameEn.isNotEmpty) {
+                  try {
+                    final newLoc = Location(
+                      id: '',
+                      code: code,
+                      nameEn: nameEn,
+                      nameSq: nameSqController.text.isNotEmpty ? nameSqController.text.trim() : nameEn,
+                      nameSr: nameEn, // Default SR to EN
+                    );
+                    await widgetRef.read(vehicleRepositoryProvider).addLocation(newLoc);
+                    widgetRef.invalidate(locationsProvider);
+                    codeController.clear();
+                    nameEnController.clear();
+                    nameSqController.clear();
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('Error: $e')));
+                    }
+                  }
+                }
+              },
+              child: Text(tr('add', widgetRef), style: const TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        ExpansionTile(
+          title: Text(tr('add_translations', widgetRef), style: const TextStyle(color: Colors.white54, fontSize: 12)),
+          children: [
+            TextField(
+              controller: nameSqController,
+              style: const TextStyle(color: Colors.white, fontSize: 13),
+              decoration: const InputDecoration(labelText: 'Name (AL)', labelStyle: TextStyle(color: Colors.white54)),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

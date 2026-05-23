@@ -5,6 +5,8 @@ import '../../search/data/vehicle_repository.dart';
 import '../../search/domain/vehicle.dart';
 import '../../search/domain/location.dart';
 import 'widgets/add_car_dialog.dart';
+import 'widgets/subscription_status_banner.dart';
+import '../data/partner_repository.dart';
 
 class FleetManagerScreen extends HookConsumerWidget {
   const FleetManagerScreen({super.key});
@@ -13,6 +15,24 @@ class FleetManagerScreen extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final vehiclesAsync = ref.watch(vehiclesListProvider());
     final locationsAsync = ref.watch(locationsProvider);
+
+    final partner = ref.watch(currentPartnerProvider);
+    final isAdmin = ref.watch(isAdminProvider);
+
+    bool isSubscriptionActive = true;
+    if (partner != null && !isAdmin) {
+      final detailsAsync = ref.watch(partnerDetailsProvider(partner.id));
+      isSubscriptionActive = detailsAsync.maybeWhen(
+        data: (details) {
+          if (details == null) return false;
+          final now = DateTime.now();
+          return details.subscriptionStatus == 'Active' &&
+              details.subscriptionExpiresAt != null &&
+              details.subscriptionExpiresAt!.isAfter(now);
+        },
+        orElse: () => false,
+      );
+    }
 
     final filterLocationId = useState<String?>(null);
 
@@ -88,10 +108,19 @@ class FleetManagerScreen extends HookConsumerWidget {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
               onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (context) => const AddCarDialog(),
-                );
+                if (!isSubscriptionActive) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      backgroundColor: Colors.redAccent,
+                      content: Text('Please activate your partner subscription to add new vehicles.'),
+                    ),
+                  );
+                } else {
+                  showDialog(
+                    context: context,
+                    builder: (context) => const AddCarDialog(),
+                  );
+                }
               },
               icon: const Icon(Icons.add, size: 18),
               label: const Text('Add Vehicle', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -101,15 +130,19 @@ class FleetManagerScreen extends HookConsumerWidget {
       ),
       body: Container(
         padding: const EdgeInsets.all(24.0),
-        child: Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: const Color(0xFF1A1A2E),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withOpacity(0.08)),
-          ),
-          padding: const EdgeInsets.all(16),
-          child: vehiclesAsync.when(
+        child: Column(
+          children: [
+            if (partner != null && !isAdmin) const SubscriptionStatusBanner(),
+            Expanded(
+              child: Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1A1A2E),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.white.withOpacity(0.08)),
+                ),
+                padding: const EdgeInsets.all(16),
+                child: vehiclesAsync.when(
             data: (vehicles) {
               // Apply local filters
               final filteredVehicles = filterLocationId.value == null
@@ -246,13 +279,16 @@ class FleetManagerScreen extends HookConsumerWidget {
                 }).toList(),
               ),
             ),
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF6C5CE7))),
-        error: (e, _) => Center(child: Text('Error loading fleet: $e', style: const TextStyle(color: Colors.redAccent))),
+              );
+            },
+            loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF6C5CE7))),
+            error: (e, _) => Center(child: Text('Error loading fleet: $e', style: const TextStyle(color: Colors.redAccent))),
+          ),
+        ),
       ),
-    ),
+    ],
   ),
+),
 );
 }
 

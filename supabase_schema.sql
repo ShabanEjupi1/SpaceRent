@@ -29,6 +29,9 @@ CREATE TABLE IF NOT EXISTS partners (
     email VARCHAR(255) UNIQUE NOT NULL,
     phone VARCHAR(50) NOT NULL,
     status VARCHAR(50) DEFAULT 'Active' NOT NULL, -- 'Active', 'Suspended'
+    subscription_status VARCHAR(50) DEFAULT 'Inactive' NOT NULL, -- 'Active', 'Inactive', 'Cancelled'
+    subscription_expires_at TIMESTAMP WITH TIME ZONE,
+    paypal_subscription_id VARCHAR(255),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -43,6 +46,7 @@ CREATE TABLE vehicles (
     has_ac BOOLEAN DEFAULT TRUE NOT NULL,
     price_per_day NUMERIC(10, 2) NOT NULL,
     image_url VARCHAR(500),
+    image_urls JSONB DEFAULT '[]'::jsonb, -- Multiple vehicle images
     location_id UUID REFERENCES locations(id) ON DELETE SET NULL,
     partner_id UUID REFERENCES partners(id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -73,10 +77,14 @@ CREATE TABLE bookings (
     start_date TIMESTAMP WITH TIME ZONE NOT NULL,
     end_date TIMESTAMP WITH TIME ZONE NOT NULL,
     total_price NUMERIC(10, 2) NOT NULL,
-    status VARCHAR(50) DEFAULT 'Pending' NOT NULL, -- 'Pending', 'Confirmed', 'Cancelled'
+    status VARCHAR(50) DEFAULT 'Pending' NOT NULL, -- 'Pending', 'Confirmed', 'Cancelled', 'Rejected'
     full_name VARCHAR(255),
     phone_number VARCHAR(50),
     email_address VARCHAR(255),
+    language VARCHAR(5) DEFAULT 'en', -- Track user locale for email notifications
+    payment_status VARCHAR(50) DEFAULT 'Unpaid' NOT NULL, -- 'Unpaid', 'Paid'
+    paypal_order_id VARCHAR(255),
+    paid_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT check_dates CHECK (end_date > start_date)
 );
@@ -114,19 +122,54 @@ ALTER TABLE partners ENABLE ROW LEVEL SECURITY;
 ALTER TABLE partner_applications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 
--- Policies
+-- ============================================================
+-- LOCATIONS Policies (SELECT + INSERT + UPDATE + DELETE)
+-- ============================================================
 DROP POLICY IF EXISTS "Allow public read access to locations" ON locations;
 CREATE POLICY "Allow public read access to locations" ON locations FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Allow insert on locations" ON locations;
+CREATE POLICY "Allow insert on locations" ON locations FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow update on locations" ON locations;
+CREATE POLICY "Allow update on locations" ON locations FOR UPDATE USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow delete on locations" ON locations;
+CREATE POLICY "Allow delete on locations" ON locations FOR DELETE USING (true);
+
+-- ============================================================
+-- VEHICLES Policies (SELECT + INSERT + UPDATE + DELETE)
+-- ============================================================
 DROP POLICY IF EXISTS "Allow public read access to vehicles" ON vehicles;
 CREATE POLICY "Allow public read access to vehicles" ON vehicles FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Allow insert on vehicles" ON vehicles;
+CREATE POLICY "Allow insert on vehicles" ON vehicles FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow update on vehicles" ON vehicles;
+CREATE POLICY "Allow update on vehicles" ON vehicles FOR UPDATE USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow delete on vehicles" ON vehicles;
+CREATE POLICY "Allow delete on vehicles" ON vehicles FOR DELETE USING (true);
+
+-- ============================================================
+-- BOOKINGS Policies (SELECT + INSERT + UPDATE + DELETE)
+-- ============================================================
 DROP POLICY IF EXISTS "Allow users to view their own bookings" ON bookings;
 CREATE POLICY "Allow users to view their own bookings" ON bookings FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Allow users to insert bookings" ON bookings;
 CREATE POLICY "Allow users to insert bookings" ON bookings FOR INSERT WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Allow update on bookings" ON bookings;
+CREATE POLICY "Allow update on bookings" ON bookings FOR UPDATE USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow delete on bookings" ON bookings;
+CREATE POLICY "Allow delete on bookings" ON bookings FOR DELETE USING (true);
+
+-- ============================================================
+-- PARTNER APPLICATIONS Policies (SELECT + INSERT + UPDATE + DELETE)
+-- ============================================================
 DROP POLICY IF EXISTS "Allow public insert of partner applications" ON partner_applications;
 CREATE POLICY "Allow public insert of partner applications" ON partner_applications FOR INSERT WITH CHECK (true);
 
@@ -134,14 +177,29 @@ DROP POLICY IF EXISTS "Allow admin read of partner applications" ON partner_appl
 CREATE POLICY "Allow admin read of partner applications" ON partner_applications FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Allow admin update of partner applications" ON partner_applications;
-CREATE POLICY "Allow admin update of partner applications" ON partner_applications FOR UPDATE USING (true);
+CREATE POLICY "Allow admin update of partner applications" ON partner_applications FOR UPDATE USING (true) WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Allow delete on partner applications" ON partner_applications;
+CREATE POLICY "Allow delete on partner applications" ON partner_applications FOR DELETE USING (true);
+
+-- ============================================================
+-- PARTNERS Policies (SELECT + INSERT + UPDATE + DELETE)
+-- ============================================================
 DROP POLICY IF EXISTS "Allow public read of partners" ON partners;
 CREATE POLICY "Allow public read of partners" ON partners FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Allow public insert of partners" ON partners;
 CREATE POLICY "Allow public insert of partners" ON partners FOR INSERT WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Allow update on partners" ON partners;
+CREATE POLICY "Allow update on partners" ON partners FOR UPDATE USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow delete on partners" ON partners;
+CREATE POLICY "Allow delete on partners" ON partners FOR DELETE USING (true);
+
+-- ============================================================
+-- PROFILES Policies (full access)
+-- ============================================================
 DROP POLICY IF EXISTS "Allow public read of profiles" ON profiles;
 CREATE POLICY "Allow public read of profiles" ON profiles FOR SELECT USING (true);
 
@@ -151,4 +209,30 @@ CREATE POLICY "Allow public insert of profiles" ON profiles FOR INSERT WITH CHEC
 DROP POLICY IF EXISTS "Allow all modifications on profiles" ON profiles;
 CREATE POLICY "Allow all modifications on profiles" ON profiles FOR ALL USING (true);
 
+-- ============================================================
+-- PAYMENTS Policies (SELECT + INSERT + UPDATE)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS payments (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    booking_id UUID REFERENCES bookings(id) ON DELETE SET NULL,
+    partner_id UUID REFERENCES partners(id) ON DELETE SET NULL,
+    amount NUMERIC(10, 2) NOT NULL,
+    currency VARCHAR(10) DEFAULT 'EUR' NOT NULL,
+    payment_type VARCHAR(50) NOT NULL, -- 'BookingPayment', 'PartnerSubscription'
+    paypal_order_id VARCHAR(255) UNIQUE,
+    paypal_subscription_id VARCHAR(255),
+    status VARCHAR(50) NOT NULL, -- 'Pending', 'Completed', 'Failed'
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow public read of payments" ON payments;
+CREATE POLICY "Allow public read of payments" ON payments FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Allow public insert of payments" ON payments;
+CREATE POLICY "Allow public insert of payments" ON payments FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow update of payments" ON payments;
+CREATE POLICY "Allow update of payments" ON payments FOR UPDATE USING (true) WITH CHECK (true);
 

@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../data/partner_repository.dart';
+import '../../notifications/email_service.dart';
+import '../../bookings/data/booking_repository.dart';
 
 class PartnerApplicationsScreen extends ConsumerWidget {
   const PartnerApplicationsScreen({super.key});
@@ -144,10 +146,40 @@ class PartnerApplicationsScreen extends ConsumerWidget {
                                           ),
                                           onPressed: () async {
                                             final inviteToken = const Uuid().v4();
-                                            await ref
-                                                .read(partnerRepositoryProvider)
-                                                .approveApplication(app.id, inviteToken);
-                                            ref.invalidate(partnerApplicationsListProvider);
+                                            try {
+                                              await ref
+                                                  .read(partnerRepositoryProvider)
+                                                  .approveApplication(app.id, inviteToken);
+
+                                              // Send partner invite email
+                                              final emailService = EmailService(ref.read(supabaseClientProvider));
+                                              await emailService.sendPartnerInviteEmail(
+                                                toEmail: app.email,
+                                                companyName: app.companyName,
+                                                contactName: app.contactName,
+                                                inviteToken: inviteToken,
+                                              );
+
+                                              ref.invalidate(partnerApplicationsListProvider);
+
+                                              if (context.mounted) {
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  SnackBar(
+                                                    backgroundColor: const Color(0xFF00CEC9),
+                                                    content: Text('Approved! Invite email sent to ${app.email}'),
+                                                  ),
+                                                );
+                                              }
+                                            } catch (e) {
+                                              if (context.mounted) {
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  SnackBar(
+                                                    backgroundColor: Colors.redAccent,
+                                                    content: Text('Error approving partner: $e'),
+                                                  ),
+                                                );
+                                              }
+                                            }
                                           },
                                           child: const Text('Approve'),
                                         )

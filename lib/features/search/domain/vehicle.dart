@@ -7,7 +7,8 @@ class Vehicle {
   final String fuelType; // 'Diesel', 'Petrol', 'Electric', 'Hybrid'
   final bool hasAc;
   final double pricePerDay;
-  final String imageUrl;
+  final String imageUrl; // Primary image (backward compatible)
+  final List<String> imageUrls; // All images
   final String locationId;
   final String? partnerId;
 
@@ -21,11 +22,23 @@ class Vehicle {
     required this.hasAc,
     required this.pricePerDay,
     required this.imageUrl,
+    List<String>? imageUrls,
     required this.locationId,
     this.partnerId,
-  });
+  }) : imageUrls = imageUrls ?? (imageUrl.isNotEmpty ? [imageUrl] : []);
 
   factory Vehicle.fromJson(Map<String, dynamic> json) {
+    final primaryUrl = json['image_url'] as String? ?? '';
+    final rawUrls = json['image_urls'];
+    List<String> urls = [];
+    if (rawUrls is List) {
+      urls = rawUrls.map((e) => e.toString()).where((s) => s.isNotEmpty).toList();
+    }
+    // If image_urls is empty but image_url exists, use it
+    if (urls.isEmpty && primaryUrl.isNotEmpty) {
+      urls = [primaryUrl];
+    }
+
     return Vehicle(
       id: json['id'] as String,
       brand: json['brand'] as String,
@@ -35,7 +48,8 @@ class Vehicle {
       fuelType: json['fuel_type'] as String,
       hasAc: json['has_ac'] as bool,
       pricePerDay: (json['price_per_day'] as num).toDouble(),
-      imageUrl: json['image_url'] as String? ?? '',
+      imageUrl: primaryUrl,
+      imageUrls: urls,
       locationId: json['location_id'] as String,
       partnerId: json['partner_id'] as String?,
     );
@@ -52,6 +66,7 @@ class Vehicle {
       'has_ac': hasAc,
       'price_per_day': pricePerDay,
       'image_url': imageUrl,
+      'image_urls': imageUrls,
       'location_id': locationId,
       'partner_id': partnerId,
     };

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../fleet/data/partner_repository.dart';
+import '../../../core/l10n/locale_provider.dart';
 
 class AdminShellLayout extends ConsumerWidget {
   final Widget child;
@@ -15,6 +16,7 @@ class AdminShellLayout extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final location = GoRouterState.of(context).uri.toString();
     final partner = ref.watch(currentPartnerProvider);
+    final lang = ref.watch(localeProvider);
 
     // Determine current selected index based on route location path
     int getSelectedIndex() {
@@ -41,57 +43,91 @@ class AdminShellLayout extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Brand Header logo area
+                // Brand Header with Logo
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
                   child: Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF6C5CE7), Color(0xFF00CEC9)],
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Image.asset(
+                          'assets/images/spacerent_logo.png',
+                          width: 40,
+                          height: 40,
+                          fit: BoxFit.cover,
+                          errorBuilder: (c, e, s) => Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF6C5CE7), Color(0xFF00CEC9)],
+                              ),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(Icons.rocket_launch, color: Colors.white, size: 22),
                           ),
-                          borderRadius: BorderRadius.circular(10),
                         ),
-                        child: const Icon(Icons.rocket_launch, color: Colors.white, size: 22),
                       ),
                       const SizedBox(width: 14),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'SpaceRent',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                              fontFamily: 'Outfit',
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              tr('brand_name', ref),
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                                fontFamily: 'Outfit',
+                              ),
                             ),
-                          ),
-                          Text(
-                            partner != null ? 'PARTNER PORTAL' : 'ADMIN PORTAL',
-                            style: const TextStyle(
-                              fontSize: 9,
-                              color: Color(0xFF00CEC9), // Neo Teal
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1.5,
+                            Text(
+                              partner != null
+                                  ? tr('partner_portal_label', ref)
+                                  : tr('admin_portal', ref),
+                              style: const TextStyle(
+                                fontSize: 9,
+                                color: Color(0xFF00CEC9),
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.5,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ],
                   ),
                 ),
 
                 const Divider(color: Colors.white12, height: 1),
-                const SizedBox(height: 24),
+
+                // Language Toggle
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
+                  child: Row(
+                    children: [
+                      _LanguageButton(
+                        label: 'EN',
+                        isActive: lang == 'en',
+                        onTap: () => ref.read(localeProvider.notifier).state = 'en',
+                      ),
+                      const SizedBox(width: 8),
+                      _LanguageButton(
+                        label: 'AL',
+                        isActive: lang == 'sq',
+                        onTap: () => ref.read(localeProvider.notifier).state = 'sq',
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 8),
 
                 // Sidebar Navigation items
                 _SidebarMenuItem(
                   icon: Icons.dashboard_outlined,
                   activeIcon: Icons.dashboard,
-                  title: 'Dashboard Home',
+                  title: tr('dashboard_home', ref),
                   isActive: getSelectedIndex() == 0,
                   onTap: () => context.go('/admin'),
                 ),
@@ -99,7 +135,7 @@ class AdminShellLayout extends ConsumerWidget {
                 _SidebarMenuItem(
                   icon: Icons.directions_car_outlined,
                   activeIcon: Icons.directions_car,
-                  title: 'Fleet Management',
+                  title: tr('fleet_management_nav', ref),
                   isActive: getSelectedIndex() == 1,
                   onTap: () => context.go('/admin/fleet'),
                 ),
@@ -107,7 +143,7 @@ class AdminShellLayout extends ConsumerWidget {
                 _SidebarMenuItem(
                   icon: Icons.assignment_outlined,
                   activeIcon: Icons.assignment,
-                  title: 'Live Bookings',
+                  title: tr('live_bookings', ref),
                   isActive: getSelectedIndex() == 2,
                   onTap: () => context.go('/admin/bookings'),
                 ),
@@ -116,7 +152,7 @@ class AdminShellLayout extends ConsumerWidget {
                   _SidebarMenuItem(
                     icon: Icons.people_outline,
                     activeIcon: Icons.people,
-                    title: 'Partner Onboarding',
+                    title: tr('partner_onboarding', ref),
                     isActive: getSelectedIndex() == 3,
                     onTap: () => context.go('/admin/applications'),
                   ),
@@ -148,7 +184,7 @@ class AdminShellLayout extends ConsumerWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  partner != null ? partner.companyName : 'PRN Hub Admin',
+                                  partner != null ? partner.companyName : 'Admin',
                                   style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
@@ -178,7 +214,7 @@ class AdminShellLayout extends ConsumerWidget {
                             context.go('/');
                           },
                           icon: const Icon(Icons.logout, size: 14),
-                          label: const Text('Logout', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          label: Text(tr('logout', ref), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                         ),
                       ),
                     ],
@@ -193,6 +229,44 @@ class AdminShellLayout extends ConsumerWidget {
             child: child,
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _LanguageButton extends StatelessWidget {
+  final String label;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  const _LanguageButton({
+    required this.label,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: isActive ? const Color(0xFF6C5CE7) : Colors.white.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isActive ? const Color(0xFF6C5CE7) : Colors.white.withOpacity(0.12),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isActive ? Colors.white : Colors.white60,
+            fontWeight: FontWeight.bold,
+            fontSize: 12,
+          ),
+        ),
       ),
     );
   }
