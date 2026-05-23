@@ -19,14 +19,13 @@ part 'router.g.dart';
 
 @riverpod
 GoRouter router(RouterRef ref) {
-  final currentPartner = ref.watch(currentPartnerProvider);
-  final isAdmin = ref.watch(isAdminProvider);
-
   return GoRouter(
     initialLocation: '/',
     redirect: (context, state) {
       final path = state.uri.path;
       if (path.startsWith('/admin')) {
+        final currentPartner = ref.read(currentPartnerProvider);
+        final isAdmin = ref.read(isAdminProvider);
         if (!isAdmin && currentPartner == null) {
           return '/partner/login';
         }
