@@ -11,6 +11,7 @@ class LiveBookingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final liveBookingsAsync = ref.watch(liveBookingsListProvider);
     final vehiclesAsync = ref.watch(vehiclesListProvider());
+    final isMobile = MediaQuery.of(context).size.width < 900;
 
     // Map vehicles for easy lookup
     final vehicleMap = vehiclesAsync.maybeWhen(
@@ -20,12 +21,14 @@ class LiveBookingsScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F0F1A),
-      appBar: AppBar(
-        title: const Text(
-          'Live Booking Stream',
-          style: TextStyle(fontFamily: 'Outfit', fontWeight: FontWeight.bold, fontSize: 24),
-        ),
-      ),
+      appBar: isMobile
+          ? null
+          : AppBar(
+              title: const Text(
+                'Live Booking Stream',
+                style: TextStyle(fontFamily: 'Outfit', fontWeight: FontWeight.bold, fontSize: 24),
+              ),
+            ),
       body: Container(
         padding: const EdgeInsets.all(24.0),
         child: Container(
@@ -38,6 +41,13 @@ class LiveBookingsScreen extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (isMobile) ...[
+                const Text(
+                  'Live Booking Stream',
+                  style: TextStyle(fontFamily: 'Outfit', fontWeight: FontWeight.bold, fontSize: 28, color: Colors.white),
+                ),
+                const SizedBox(height: 16),
+              ],
               const Row(
                 children: [
                   Icon(Icons.wifi_tethering, color: Color(0xFF00CEC9), size: 20),
@@ -69,6 +79,102 @@ class LiveBookingsScreen extends ConsumerWidget {
 
                         final startStr = DateFormat('dd MMM yyyy').format(booking.startDate);
                         final endStr = DateFormat('dd MMM yyyy').format(booking.endDate);
+
+                        if (isMobile) {
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.02),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.white.withOpacity(0.04)),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        vehicleName,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    Text(
+                                      '€${booking.totalPrice.toStringAsFixed(0)}',
+                                      style: const TextStyle(
+                                        color: Color(0xFF00CEC9),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 18,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.calendar_today_outlined, size: 12, color: Colors.white54),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      '$startStr - $endStr',
+                                      style: const TextStyle(color: Colors.white54, fontSize: 12),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    _StatusChip(status: booking.status),
+                                    if (booking.status == 'Pending') ...[
+                                      Row(
+                                        children: [
+                                          ElevatedButton(
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: Colors.green.withOpacity(0.2),
+                                              foregroundColor: Colors.greenAccent,
+                                              elevation: 0,
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                            ),
+                                            onPressed: () async {
+                                              await ref
+                                                  .read(adminBookingRepositoryProvider)
+                                                  .updateBookingStatus(booking.id, 'Confirmed');
+                                            },
+                                            child: const Text('Confirm', style: TextStyle(fontSize: 12)),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          OutlinedButton(
+                                            style: OutlinedButton.styleFrom(
+                                              foregroundColor: Colors.redAccent,
+                                              side: const BorderSide(color: Colors.redAccent),
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                            ),
+                                            onPressed: () async {
+                                              await ref
+                                                  .read(adminBookingRepositoryProvider)
+                                                  .updateBookingStatus(booking.id, 'Cancelled');
+                                            },
+                                            child: const Text('Cancel', style: TextStyle(fontSize: 12)),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ],
+                            ),
+                          );
+                        }
 
                         return Container(
                           margin: const EdgeInsets.only(bottom: 12),

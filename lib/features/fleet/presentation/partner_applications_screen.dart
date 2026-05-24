@@ -13,15 +13,18 @@ class PartnerApplicationsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final applicationsAsync = ref.watch(partnerApplicationsListProvider);
+    final isMobile = MediaQuery.of(context).size.width < 900;
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F0F1A),
-      appBar: AppBar(
-        title: const Text(
-          'Partner Hub Applications',
-          style: TextStyle(fontFamily: 'Outfit', fontWeight: FontWeight.bold, fontSize: 24),
-        ),
-      ),
+      appBar: isMobile
+          ? null
+          : AppBar(
+              title: const Text(
+                'Partner Hub Applications',
+                style: TextStyle(fontFamily: 'Outfit', fontWeight: FontWeight.bold, fontSize: 24),
+              ),
+            ),
       body: Container(
         padding: const EdgeInsets.all(24.0),
         child: Container(
@@ -35,6 +38,13 @@ class PartnerApplicationsScreen extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (isMobile) ...[
+                const Text(
+                  'Partner Hub Applications',
+                  style: TextStyle(fontFamily: 'Outfit', fontWeight: FontWeight.bold, fontSize: 28, color: Colors.white),
+                ),
+                const SizedBox(height: 12),
+              ],
               const Text(
                 'Review incoming business requests to join the SpaceRent Kosovo network',
                 style: TextStyle(color: Colors.white54, fontSize: 13),

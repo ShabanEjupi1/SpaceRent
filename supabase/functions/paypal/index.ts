@@ -1,7 +1,6 @@
 // SpaceRent Kosovo — PayPal Payment Edge Function
 // Deploy: supabase functions deploy paypal
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 
 const corsHeaders = {
@@ -31,7 +30,7 @@ async function getPayPalAccessToken(clientId: string, clientSecret: string, apiB
   return data.access_token;
 }
 
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -77,6 +76,8 @@ serve(async (req: Request) => {
           application_context: {
             brand_name: "SpaceRent Kosovo",
             user_action: "PAY_NOW",
+            landing_page: "BILLING", // Instructs PayPal to show the credit card form directly
+            shipping_preference: "NO_SHIPPING",
           },
         }),
       });

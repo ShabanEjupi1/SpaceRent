@@ -1,21 +1,13 @@
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:uuid/uuid.dart';
+import 'package:file_picker/file_picker.dart';
 import '../../../../core/l10n/locale_provider.dart';
 import '../../../search/data/vehicle_repository.dart';
 import '../../../search/domain/location.dart';
 import '../../../search/domain/vehicle.dart';
-
-// Web file picker helper — uses dart:html on web
-// For mobile, you'd use file_picker or image_picker package
-// This implementation works for web deployments
-class PickedImage {
-  final String name;
-  final Uint8List bytes;
-  PickedImage({required this.name, required this.bytes});
-}
+import '../../data/partner_repository.dart';
 
 class AddCarDialog extends HookConsumerWidget {
   const AddCarDialog({super.key});
@@ -23,6 +15,8 @@ class AddCarDialog extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final locationsAsync = ref.watch(locationsProvider);
+    final partner = ref.watch(currentPartnerProvider);
+    final isAdmin = ref.watch(isAdminProvider);
 
     // Form Keys and Hooks Controllers
     final formKey = useMemoized(() => GlobalKey<FormState>());
@@ -64,6 +58,38 @@ class AddCarDialog extends HookConsumerWidget {
       final newList = List<String>.from(imageUrls.value);
       newList.removeAt(index);
       imageUrls.value = newList;
+    }
+
+    Future<void> pickAndUploadImages() async {
+      try {
+        final result = await FilePicker.platform.pickFiles(
+          type: FileType.image,
+          allowMultiple: true,
+          withData: true, // Required for Web to get bytes
+        );
+
+        if (result != null && result.files.isNotEmpty) {
+          isSaving.value = true;
+          errorMessage.value = null;
+
+          final newUrls = <String>[];
+          for (final file in result.files) {
+            final bytes = file.bytes;
+            if (bytes != null) {
+              final url = await ref.read(vehicleRepositoryProvider).uploadVehicleImage(
+                fileBytes: bytes,
+                fileName: file.name,
+              );
+              newUrls.add(url);
+            }
+          }
+          imageUrls.value = [...imageUrls.value, ...newUrls];
+        }
+      } catch (e) {
+        errorMessage.value = 'Failed to upload image: $e';
+      } finally {
+        isSaving.value = false;
+      }
     }
 
     return AlertDialog(
@@ -178,7 +204,25 @@ class AddCarDialog extends HookConsumerWidget {
                   tr('vehicle_images', ref),
                   style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
+
+                // File Upload Button
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1A1A2E),
+                      foregroundColor: const Color(0xFF00CEC9),
+                      side: const BorderSide(color: Color(0xFF00CEC9), width: 1),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    onPressed: isSaving.value ? null : pickAndUploadImages,
+                    icon: const Icon(Icons.upload_file, size: 18),
+                    label: const Text('Upload Local Images', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                const SizedBox(height: 12),
 
                 // Image URL input with Add button
                 Row(
@@ -354,7 +398,11 @@ class AddCarDialog extends HookConsumerWidget {
           onPressed: isSaving.value
               ? null
               : () async {
-                  if (formKey.currentState!.validate() && selectedLocation.value != null) {
+                  if (selectedLocation.value == null) {
+                    errorMessage.value = 'Please select a location hub.';
+                    return;
+                  }
+                  if (formKey.currentState!.validate()) {
                     // Require at least one image
                     final allUrls = List<String>.from(imageUrls.value);
                     final pendingUrl = imageUrlController.text.trim();
@@ -382,6 +430,7 @@ class AddCarDialog extends HookConsumerWidget {
                         imageUrl: allUrls.first,
                         imageUrls: allUrls,
                         locationId: selectedLocation.value!.id,
+                        partnerId: (partner != null && !isAdmin) ? partner.id : null,
                       );
 
                       await ref.read(vehicleRepositoryProvider).addVehicle(vehicle);
@@ -398,6 +447,7 @@ class AddCarDialog extends HookConsumerWidget {
                       }
                     } catch (e) {
                       errorMessage.value = e.toString();
+                    } finally {
                       isSaving.value = false;
                     }
                   }

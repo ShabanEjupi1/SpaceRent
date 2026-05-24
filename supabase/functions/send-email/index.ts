@@ -1,8 +1,7 @@
 // SpaceRent Kosovo — Email Sending Edge Function (Gmail SMTP)
 // Deploy: supabase functions deploy send-email
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { SMTPClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts";
+import nodemailer from "npm:nodemailer";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -16,7 +15,7 @@ interface EmailRequest {
   html: string;
 }
 
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -44,28 +43,24 @@ serve(async (req: Request) => {
       );
     }
 
-    // Connect and send via Gmail SMTP (port 465 for SSL)
-    const client = new SMTPClient({
-      connection: {
-        hostname: "smtp.gmail.com",
-        port: 465,
-        tls: true,
-        auth: {
-          username: SMTP_USER,
-          password: SMTP_PASS,
-        },
+    // Configure Nodemailer transporter with Gmail SMTP credentials
+    const transporter = nodemailer.createTransport({
+      host: "smtp.gmail.com",
+      port: 465,
+      secure: true,
+      auth: {
+        user: SMTP_USER,
+        pass: SMTP_PASS,
       },
     });
 
-    await client.send({
-      from: `SpaceRent Kosovo <${SMTP_USER}>`,
+    // Send the email
+    await transporter.sendMail({
+      from: `"SpaceRent Kosovo" <${SMTP_USER}>`,
       to: to,
       subject: subject,
-      content: "SpaceRent Kosovo Notification (HTML formatted)",
       html: html,
     });
-
-    await client.close();
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200,

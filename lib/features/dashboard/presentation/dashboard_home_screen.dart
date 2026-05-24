@@ -60,10 +60,10 @@ class DashboardHomeScreen extends HookConsumerWidget {
           SliverPadding(
             padding: const EdgeInsets.all(24.0),
             sliver: SliverToBoxAdapter(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final isMobile = constraints.maxWidth < 600;
+                  final headerContent = Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
@@ -93,8 +93,9 @@ class DashboardHomeScreen extends HookConsumerWidget {
                         style: const TextStyle(color: Colors.white54, fontSize: 13),
                       ),
                     ],
-                  ),
-                  ElevatedButton.icon(
+                  );
+
+                  final actionButton = ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF6C5CE7),
                       foregroundColor: Colors.white,
@@ -109,8 +110,31 @@ class DashboardHomeScreen extends HookConsumerWidget {
                     },
                     icon: const Icon(Icons.add, size: 18),
                     label: Text(tr('add_vehicle', ref), style: const TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                ],
+                  );
+
+                  if (isMobile) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        headerContent,
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          child: actionButton,
+                        ),
+                      ],
+                    );
+                  }
+
+                  return Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(child: headerContent),
+                      const SizedBox(width: 16),
+                      actionButton,
+                    ],
+                  );
+                },
               ),
             ),
           ),
@@ -252,6 +276,7 @@ class DashboardHomeScreen extends HookConsumerWidget {
     WidgetRef ref,
     AsyncValue<List<PartnerApplication>> applicationsAsync,
   ) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
     return _SectionCard(
       title: tr('partner_comm_links', ref),
       icon: Icons.connect_without_contact,
@@ -277,74 +302,93 @@ class DashboardHomeScreen extends HookConsumerWidget {
             separatorBuilder: (c, i) => const Divider(color: Colors.white10),
             itemBuilder: (context, index) {
               final app = pending[index];
+              final approveButton = ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6C5CE7),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () async {
+                  final inviteToken = const Uuid().v4();
+                  try {
+                    await ref.read(partnerRepositoryProvider).approveApplication(app.id, inviteToken);
+
+                    // Send partner invite email
+                    final emailService = EmailService(ref.read(supabaseClientProvider));
+                    await emailService.sendPartnerInviteEmail(
+                      toEmail: app.email,
+                      companyName: app.companyName,
+                      contactName: app.contactName,
+                      inviteToken: inviteToken,
+                    );
+
+                    ref.invalidate(partnerApplicationsListProvider);
+                    ref.invalidate(partnersListProvider);
+
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          backgroundColor: const Color(0xFF00CEC9),
+                          content: Text('Approved! Invite email sent to ${app.email}'),
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          backgroundColor: Colors.redAccent,
+                          content: Text('Error approving partner: $e'),
+                        ),
+                      );
+                    }
+                  }
+                },
+                child: const Text('Approve'),
+              );
+
+              if (isMobile) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(app.companyName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                      const SizedBox(height: 4),
+                      Text('Contact: ${app.contactName}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                      Text('Phone: ${app.phone}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                      Text('Email: ${app.email}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: approveButton,
+                      ),
+                    ],
+                  ),
+                );
+              }
+
               return ListTile(
                 title: Text(app.companyName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 subtitle: Text('Contact: ${app.contactName} • ${app.phone} • ${app.email}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF6C5CE7),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                      onPressed: () async {
-                        final inviteToken = const Uuid().v4();
-                        try {
-                          await ref.read(partnerRepositoryProvider).approveApplication(app.id, inviteToken);
-
-                          // Send partner invite email
-                          final emailService = EmailService(ref.read(supabaseClientProvider));
-                          await emailService.sendPartnerInviteEmail(
-                            toEmail: app.email,
-                            companyName: app.companyName,
-                            contactName: app.contactName,
-                            inviteToken: inviteToken,
-                          );
-
-                          ref.invalidate(partnerApplicationsListProvider);
-                          ref.invalidate(partnersListProvider);
-
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                backgroundColor: const Color(0xFF00CEC9),
-                                content: Text('Approved! Invite email sent to ${app.email}'),
-                              ),
-                            );
-                          }
-                        } catch (e) {
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                backgroundColor: Colors.redAccent,
-                                content: Text('Error: $e'),
-                              ),
-                            );
-                          }
-                        }
-                      },
-                      child: Text(tr('approve', ref)),
-                    ),
-                  ],
-                ),
+                trailing: approveButton,
               );
             },
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, s) => Text('Error: $e', style: const TextStyle(color: Colors.redAccent)),
+        error: (e, s) => Text('Error: $e'),
       ),
     );
   }
 
-  // --- 3. Active Partners Section ---
+  // --- 3. Active Partners list ---
   Widget _buildActivePartnersSection(
     BuildContext context,
     WidgetRef ref,
     AsyncValue<List<Partner>> partnersAsync,
   ) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
     return _SectionCard(
       title: tr('active_partners', ref),
       icon: Icons.handshake,
@@ -367,52 +411,94 @@ class DashboardHomeScreen extends HookConsumerWidget {
             itemBuilder: (context, index) {
               final p = partners[index];
               final isSuspended = p.status == 'Suspended';
+
+              final statusWidget = Text(
+                p.status,
+                style: TextStyle(
+                  color: isSuspended ? Colors.redAccent : const Color(0xFF00CEC9),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              );
+
+              final actionButtons = Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: Icon(
+                      isSuspended ? Icons.play_arrow : Icons.pause,
+                      color: Colors.amberAccent,
+                      size: 20,
+                    ),
+                    onPressed: () async {
+                      try {
+                        final newStatus = isSuspended ? 'Active' : 'Suspended';
+                        await ref.read(partnerRepositoryProvider).updatePartnerStatus(p.id, newStatus);
+                        ref.invalidate(partnersListProvider);
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('Error: $e')));
+                        }
+                      }
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+                    onPressed: () async {
+                      try {
+                        await ref.read(partnerRepositoryProvider).deletePartner(p.id);
+                        ref.invalidate(partnersListProvider);
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('Error: $e')));
+                        }
+                      }
+                    },
+                  ),
+                ],
+              );
+
+              if (isMobile) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(p.companyName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                          ),
+                          statusWidget,
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text('Contact: ${p.contactName}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                      Text('Email: ${p.email}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          const Text('Actions:', style: TextStyle(color: Colors.white30, fontSize: 11)),
+                          const SizedBox(width: 8),
+                          actionButtons,
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+              }
+
               return ListTile(
                 title: Text(p.companyName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 subtitle: Text('Contact: ${p.contactName} • ${p.email}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      p.status,
-                      style: TextStyle(
-                        color: isSuspended ? Colors.redAccent : const Color(0xFF00CEC9),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
-                    ),
+                    statusWidget,
                     const SizedBox(width: 16),
-                    IconButton(
-                      icon: Icon(
-                        isSuspended ? Icons.play_arrow : Icons.pause,
-                        color: Colors.amberAccent,
-                        size: 20,
-                      ),
-                      onPressed: () async {
-                        try {
-                          final newStatus = isSuspended ? 'Active' : 'Suspended';
-                          await ref.read(partnerRepositoryProvider).updatePartnerStatus(p.id, newStatus);
-                          ref.invalidate(partnersListProvider);
-                        } catch (e) {
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('Error: $e')));
-                          }
-                        }
-                      },
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
-                      onPressed: () async {
-                        try {
-                          await ref.read(partnerRepositoryProvider).deletePartner(p.id);
-                          ref.invalidate(partnersListProvider);
-                        } catch (e) {
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('Error: $e')));
-                          }
-                        }
-                      },
-                    ),
+                    actionButtons,
                   ],
                 ),
               );
@@ -432,6 +518,7 @@ class DashboardHomeScreen extends HookConsumerWidget {
     ValueNotifier<List<Map<String, String>>> supportRequests,
   ) {
     final list = supportRequests.value;
+    final isMobile = MediaQuery.of(context).size.width < 600;
     return _SectionCard(
       title: '${tr('support_requests', ref)} (${list.length})',
       icon: Icons.contact_support_outlined,
@@ -450,43 +537,83 @@ class DashboardHomeScreen extends HookConsumerWidget {
               itemBuilder: (context, index) {
                 final req = list[index];
                 final isOpen = req['status'] == 'Open';
+
+                final statusWidget = Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: isOpen ? Colors.redAccent.withOpacity(0.1) : Colors.green.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: isOpen ? Colors.redAccent : Colors.green),
+                  ),
+                  child: Text(
+                    req['status']!,
+                    style: TextStyle(color: isOpen ? Colors.redAccent : Colors.green, fontSize: 10, fontWeight: FontWeight.bold),
+                  ),
+                );
+
+                final actionButtons = Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (isOpen)
+                      IconButton(
+                        icon: const Icon(Icons.check_circle_outline, color: Colors.greenAccent, size: 20),
+                        onPressed: () {
+                          final newList = List<Map<String, String>>.from(supportRequests.value);
+                          newList[index] = Map<String, String>.from(newList[index]);
+                          newList[index]['status'] = 'Resolved';
+                          supportRequests.value = newList;
+                        },
+                      ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),
+                      onPressed: () {
+                        final newList = List<Map<String, String>>.from(supportRequests.value);
+                        newList.removeAt(index);
+                        supportRequests.value = newList;
+                      },
+                    ),
+                  ],
+                );
+
+                if (isMobile) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text(req['subject']!, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                            ),
+                            statusWidget,
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text('From: ${req['partner']}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                        Text('Date: ${req['date']}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            actionButtons,
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
                 return ListTile(
                   title: Text(req['subject']!, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
                   subtitle: Text('From: ${req['partner']} • Date: ${req['date']}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: isOpen ? Colors.redAccent.withOpacity(0.1) : Colors.green.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: isOpen ? Colors.redAccent : Colors.green),
-                        ),
-                        child: Text(
-                          req['status']!,
-                          style: TextStyle(color: isOpen ? Colors.redAccent : Colors.green, fontSize: 10, fontWeight: FontWeight.bold),
-                        ),
-                      ),
+                      statusWidget,
                       const SizedBox(width: 8),
-                      if (isOpen)
-                        IconButton(
-                          icon: const Icon(Icons.check_circle_outline, color: Colors.greenAccent, size: 20),
-                          onPressed: () {
-                            final newList = List<Map<String, String>>.from(supportRequests.value);
-                            newList[index] = Map<String, String>.from(newList[index]);
-                            newList[index]['status'] = 'Resolved';
-                            supportRequests.value = newList;
-                          },
-                        ),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),
-                        onPressed: () {
-                          final newList = List<Map<String, String>>.from(supportRequests.value);
-                          newList.removeAt(index);
-                          supportRequests.value = newList;
-                        },
-                      ),
+                      actionButtons,
                     ],
                   ),
                 );
@@ -502,6 +629,7 @@ class DashboardHomeScreen extends HookConsumerWidget {
     AsyncValue<List<Location>> locationsAsync,
   ) {
     final lang = ref.watch(localeProvider);
+    final isMobile = MediaQuery.of(context).size.width < 600;
 
     return _SectionCard(
       title: tr('locations_management', ref),
@@ -524,22 +652,46 @@ class DashboardHomeScreen extends HookConsumerWidget {
                 itemBuilder: (context, index) {
                   final loc = locs[index];
                   final displayName = loc.getLocalizedName(lang);
+
+                  final deleteButton = IconButton(
+                    icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),
+                    onPressed: () async {
+                      try {
+                        await ref.read(vehicleRepositoryProvider).deleteLocation(loc.id);
+                        ref.invalidate(locationsProvider);
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('Error: $e')));
+                        }
+                      }
+                    },
+                  );
+
+                  if (isMobile) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(displayName, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                                Text('Code: ${loc.code}', style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                              ],
+                            ),
+                          ),
+                          deleteButton,
+                        ],
+                      ),
+                    );
+                  }
+
                   return ListTile(
                     title: Text('$displayName (${loc.code})', style: const TextStyle(color: Colors.white, fontSize: 14)),
                     subtitle: Text('Code: ${loc.code}', style: const TextStyle(color: Colors.white54, fontSize: 11)),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),
-                      onPressed: () async {
-                        try {
-                          await ref.read(vehicleRepositoryProvider).deleteLocation(loc.id);
-                          ref.invalidate(locationsProvider);
-                        } catch (e) {
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('Error: $e')));
-                          }
-                        }
-                      },
-                    ),
+                    trailing: deleteButton,
                   );
                 },
               );
@@ -558,6 +710,7 @@ class DashboardHomeScreen extends HookConsumerWidget {
     WidgetRef ref,
     AsyncValue<List<Profile>> profilesAsync,
   ) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
     return _SectionCard(
       title: tr('user_management', ref),
       icon: Icons.person_outline,
@@ -570,33 +723,65 @@ class DashboardHomeScreen extends HookConsumerWidget {
             separatorBuilder: (c, i) => const Divider(color: Colors.white10),
             itemBuilder: (context, index) {
               final profile = profiles[index];
+
+              final roleDropdown = DropdownButton<String>(
+                dropdownColor: const Color(0xFF16162B),
+                underline: const SizedBox(),
+                value: profile.role,
+                style: const TextStyle(color: Color(0xFF00CEC9), fontWeight: FontWeight.bold, fontSize: 13),
+                items: ['Customer', 'Partner', 'Admin'].map((role) {
+                  return DropdownMenuItem<String>(
+                    value: role,
+                    child: Text(role),
+                  );
+                }).toList(),
+                onChanged: (newRole) async {
+                  if (newRole != null) {
+                    try {
+                      await ref.read(profileRepositoryProvider).updateProfileRole(profile.id, newRole);
+                      ref.invalidate(profilesListProvider);
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('Error: $e')));
+                      }
+                    }
+                  }
+                },
+              );
+
+              if (isMobile) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(profile.email, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                            const SizedBox(height: 2),
+                            Text('ID: ${profile.id}', style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: roleDropdown,
+                      ),
+                    ],
+                  ),
+                );
+              }
+
               return ListTile(
                 title: Text(profile.email, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
                 subtitle: Text('ID: ${profile.id}', style: const TextStyle(color: Colors.white54, fontSize: 11)),
-                trailing: DropdownButton<String>(
-                  dropdownColor: const Color(0xFF16162B),
-                  underline: const SizedBox(),
-                  value: profile.role,
-                  style: const TextStyle(color: Color(0xFF00CEC9), fontWeight: FontWeight.bold, fontSize: 13),
-                  items: ['Customer', 'Partner', 'Admin'].map((role) {
-                    return DropdownMenuItem<String>(
-                      value: role,
-                      child: Text(role),
-                    );
-                  }).toList(),
-                  onChanged: (newRole) async {
-                    if (newRole != null) {
-                      try {
-                        await ref.read(profileRepositoryProvider).updateProfileRole(profile.id, newRole);
-                        ref.invalidate(profilesListProvider);
-                      } catch (e) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('Error: $e')));
-                        }
-                      }
-                    }
-                  },
-                ),
+                trailing: roleDropdown,
               );
             },
           );
@@ -785,96 +970,119 @@ class DashboardHomeScreen extends HookConsumerWidget {
                   color: Colors.white.withOpacity(0.01),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: Column(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isSmall = constraints.maxWidth < 550;
+
+                    final infoContent = Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          vehicleName,
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${tr('customer', ref)}: ${booking.fullName ?? "Guest"} • ${booking.phoneNumber ?? "N/A"}',
+                          style: const TextStyle(color: Colors.white70, fontSize: 11),
+                        ),
+                        Text(
+                          'Dates: $startStr - $endStr',
+                          style: const TextStyle(color: Colors.white54, fontSize: 11),
+                        ),
+                      ],
+                    );
+
+                    final priceContent = Text(
+                      '€${booking.totalPrice.toStringAsFixed(0)}',
+                      style: const TextStyle(color: Color(0xFF00CEC9), fontWeight: FontWeight.bold, fontSize: 15),
+                    );
+
+                    final statusActions = Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: statusColor.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: statusColor.withOpacity(0.3)),
+                          ),
+                          child: Text(
+                            booking.status,
+                            style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        PopupMenuButton<String>(
+                          icon: const Icon(Icons.edit, size: 16, color: Colors.white54),
+                          color: const Color(0xFF16162B),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          onSelected: (newStatus) async {
+                            try {
+                              await ref
+                                  .read(adminBookingRepositoryProvider)
+                                  .updateBookingStatus(booking.id, newStatus);
+
+                              ref.invalidate(liveBookingsListProvider);
+
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    backgroundColor: const Color(0xFF00CEC9),
+                                    content: Text('Booking status updated to $newStatus'),
+                                  ),
+                                );
+                              }
+                            } catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    backgroundColor: Colors.redAccent,
+                                    content: Text('Error updating booking: $e'),
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            const PopupMenuItem(value: 'Pending', child: Text('Pending', style: TextStyle(color: Colors.amber, fontSize: 13))),
+                            const PopupMenuItem(value: 'Confirmed', child: Text('Confirmed', style: TextStyle(color: Colors.green, fontSize: 13))),
+                            const PopupMenuItem(value: 'Cancelled', child: Text('Cancelled', style: TextStyle(color: Colors.redAccent, fontSize: 13))),
+                            const PopupMenuItem(value: 'Rejected', child: Text('Rejected', style: TextStyle(color: Colors.red, fontSize: 13))),
+                          ],
+                        ),
+                      ],
+                    );
+
+                    if (isSmall) {
+                      return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            vehicleName,
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${tr('customer', ref)}: ${booking.fullName ?? "Guest"} • ${booking.phoneNumber ?? "N/A"}',
-                            style: const TextStyle(color: Colors.white70, fontSize: 11),
-                          ),
-                          Text(
-                            'Dates: $startStr - $endStr',
-                            style: const TextStyle(color: Colors.white54, fontSize: 11),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      flex: 1,
-                      child: Text(
-                        '€${booking.totalPrice.toStringAsFixed(0)}',
-                        style: const TextStyle(color: Color(0xFF00CEC9), fontWeight: FontWeight.bold, fontSize: 15),
-                      ),
-                    ),
-                    Expanded(
-                      flex: 2,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: statusColor.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: statusColor.withOpacity(0.3)),
-                            ),
-                            child: Text(
-                              booking.status,
-                              style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          PopupMenuButton<String>(
-                            icon: const Icon(Icons.edit, size: 16, color: Colors.white54),
-                            color: const Color(0xFF16162B),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            onSelected: (newStatus) async {
-                              try {
-                                await ref
-                                    .read(adminBookingRepositoryProvider)
-                                    .updateBookingStatus(booking.id, newStatus);
-
-                                ref.invalidate(liveBookingsListProvider);
-
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      backgroundColor: const Color(0xFF00CEC9),
-                                      content: Text('Booking status updated to $newStatus'),
-                                    ),
-                                  );
-                                }
-                              } catch (e) {
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      backgroundColor: Colors.redAccent,
-                                      content: Text('Error updating booking: $e'),
-                                    ),
-                                  );
-                                }
-                              }
-                            },
-                            itemBuilder: (context) => [
-                              const PopupMenuItem(value: 'Pending', child: Text('Pending', style: TextStyle(color: Colors.amber, fontSize: 13))),
-                              const PopupMenuItem(value: 'Confirmed', child: Text('Confirmed', style: TextStyle(color: Colors.green, fontSize: 13))),
-                              const PopupMenuItem(value: 'Cancelled', child: Text('Cancelled', style: TextStyle(color: Colors.redAccent, fontSize: 13))),
-                              const PopupMenuItem(value: 'Rejected', child: Text('Rejected', style: TextStyle(color: Colors.red, fontSize: 13))),
+                          infoContent,
+                          const SizedBox(height: 10),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              priceContent,
+                              statusActions,
                             ],
                           ),
                         ],
-                      ),
-                    ),
-                  ],
+                      );
+                    }
+
+                    return Row(
+                      children: [
+                        Expanded(flex: 3, child: infoContent),
+                        Expanded(flex: 1, child: priceContent),
+                        Expanded(flex: 2, child: Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [statusActions],
+                        )),
+                      ],
+                    );
+                  },
                 ),
               );
             },
@@ -1174,83 +1382,113 @@ class _LocationAddForm extends HookConsumerWidget {
     final nameEnController = useTextEditingController();
     final nameSqController = useTextEditingController();
 
-    return Column(
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Expanded(
-              flex: 1,
-              child: TextField(
-                controller: codeController,
-                style: const TextStyle(color: Colors.white, fontSize: 13),
-                decoration: InputDecoration(
-                  labelText: tr('id_label', widgetRef),
-                  labelStyle: const TextStyle(color: Colors.white60, fontSize: 11),
-                  enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              flex: 3,
-              child: TextField(
-                controller: nameEnController,
-                style: const TextStyle(color: Colors.white, fontSize: 13),
-                decoration: InputDecoration(
-                  labelText: tr('location_name_en', widgetRef),
-                  labelStyle: const TextStyle(color: Colors.white60, fontSize: 11),
-                  enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00CEC9),
-                foregroundColor: Colors.black,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              onPressed: () async {
-                final code = codeController.text.trim();
-                final nameEn = nameEnController.text.trim();
-                if (code.isNotEmpty && nameEn.isNotEmpty) {
-                  try {
-                    final newLoc = Location(
-                      id: '',
-                      code: code,
-                      nameEn: nameEn,
-                      nameSq: nameSqController.text.isNotEmpty ? nameSqController.text.trim() : nameEn,
-                      nameSr: nameEn, // Default SR to EN
-                    );
-                    await widgetRef.read(vehicleRepositoryProvider).addLocation(newLoc);
-                    widgetRef.invalidate(locationsProvider);
-                    codeController.clear();
-                    nameEnController.clear();
-                    nameSqController.clear();
-                  } catch (e) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('Error: $e')));
-                    }
-                  }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 500;
+
+        final codeField = TextField(
+          controller: codeController,
+          style: const TextStyle(color: Colors.white, fontSize: 13),
+          decoration: InputDecoration(
+            labelText: tr('id_label', widgetRef),
+            labelStyle: const TextStyle(color: Colors.white60, fontSize: 11),
+            enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+          ),
+        );
+
+        final nameField = TextField(
+          controller: nameEnController,
+          style: const TextStyle(color: Colors.white, fontSize: 13),
+          decoration: InputDecoration(
+            labelText: tr('location_name_en', widgetRef),
+            labelStyle: const TextStyle(color: Colors.white60, fontSize: 11),
+            enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+          ),
+        );
+
+        final addButton = ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF00CEC9),
+            foregroundColor: Colors.black,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+          onPressed: () async {
+            final code = codeController.text.trim();
+            final nameEn = nameEnController.text.trim();
+            if (code.isNotEmpty && nameEn.isNotEmpty) {
+              try {
+                final newLoc = Location(
+                  id: '',
+                  code: code,
+                  nameEn: nameEn,
+                  nameSq: nameSqController.text.isNotEmpty ? nameSqController.text.trim() : nameEn,
+                  nameSr: nameEn, // Remove SR field & default to EN
+                );
+                await widgetRef.read(vehicleRepositoryProvider).addLocation(newLoc);
+                widgetRef.invalidate(locationsProvider);
+                codeController.clear();
+                nameEnController.clear();
+                nameSqController.clear();
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('Error: $e')));
                 }
-              },
-              child: Text(tr('add', widgetRef), style: const TextStyle(fontWeight: FontWeight.bold)),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        ExpansionTile(
-          title: Text(tr('add_translations', widgetRef), style: const TextStyle(color: Colors.white54, fontSize: 12)),
+              }
+            }
+          },
+          child: Text(tr('add', widgetRef), style: const TextStyle(fontWeight: FontWeight.bold)),
+        );
+
+        if (isMobile) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              codeField,
+              const SizedBox(height: 12),
+              nameField,
+              const SizedBox(height: 16),
+              addButton,
+              const SizedBox(height: 16),
+              ExpansionTile(
+                title: Text(tr('add_translations', widgetRef), style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                children: [
+                  TextField(
+                    controller: nameSqController,
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    decoration: const InputDecoration(labelText: 'Name (AL)', labelStyle: TextStyle(color: Colors.white54)),
+                  ),
+                ],
+              ),
+            ],
+          );
+        }
+
+        return Column(
           children: [
-            TextField(
-              controller: nameSqController,
-              style: const TextStyle(color: Colors.white, fontSize: 13),
-              decoration: const InputDecoration(labelText: 'Name (AL)', labelStyle: TextStyle(color: Colors.white54)),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(flex: 1, child: codeField),
+                const SizedBox(width: 12),
+                Expanded(flex: 3, child: nameField),
+                const SizedBox(width: 12),
+                addButton,
+              ],
+            ),
+            const SizedBox(height: 16),
+            ExpansionTile(
+              title: Text(tr('add_translations', widgetRef), style: const TextStyle(color: Colors.white54, fontSize: 12)),
+              children: [
+                TextField(
+                  controller: nameSqController,
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  decoration: const InputDecoration(labelText: 'Name (AL)', labelStyle: TextStyle(color: Colors.white54)),
+                ),
+              ],
             ),
           ],
-        ),
-      ],
+        );
+      },
     );
   }
 }
@@ -1336,21 +1574,55 @@ class _SectionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final showVertical = action != null && constraints.maxWidth < 450;
+              final titleRow = Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(icon, color: const Color(0xFF00CEC9), size: 20),
                   const SizedBox(width: 8),
-                  Text(
-                    title,
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, fontFamily: 'Outfit'),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        fontFamily: 'Outfit',
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ],
-              ),
-              if (action != null) action!,
-            ],
+              );
+
+              if (showVertical) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [Expanded(child: titleRow)]),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: action!,
+                    ),
+                  ],
+                );
+              }
+
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(child: titleRow),
+                  if (action != null) ...[
+                    const SizedBox(width: 8),
+                    action!,
+                  ],
+                ],
+              );
+            },
           ),
           const SizedBox(height: 16),
           child,
