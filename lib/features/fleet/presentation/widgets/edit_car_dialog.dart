@@ -1,50 +1,53 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:uuid/uuid.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../../../core/l10n/locale_provider.dart';
 import '../../../search/data/vehicle_repository.dart';
 import '../../../search/domain/location.dart';
 import '../../../search/domain/vehicle.dart';
-import '../../data/partner_repository.dart';
 
-class AddCarDialog extends HookConsumerWidget {
-  const AddCarDialog({super.key});
+class EditCarDialog extends HookConsumerWidget {
+  final Vehicle vehicle;
+
+  const EditCarDialog({super.key, required this.vehicle});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final locationsAsync = ref.watch(locationsProvider);
-    final partner = ref.watch(currentPartnerProvider);
-    final isAdmin = ref.watch(isAdminProvider);
 
-    // Form Keys and Hooks Controllers
+    // Form Keys and Hooks Controllers pre-populated with vehicle details
     final formKey = useMemoized(() => GlobalKey<FormState>());
-    final brandController = useTextEditingController();
-    final modelController = useTextEditingController();
-    final yearController = useTextEditingController(text: DateTime.now().year.toString());
-    final rateController = useTextEditingController();
+    final brandController = useTextEditingController(text: vehicle.brand);
+    final modelController = useTextEditingController(text: vehicle.model);
+    final yearController = useTextEditingController(text: vehicle.year.toString());
+    final rateController = useTextEditingController(text: vehicle.pricePerDay.toStringAsFixed(0));
     final imageUrlController = useTextEditingController();
-    final seatsController = useTextEditingController();
-    final doorsController = useTextEditingController();
-    final engineController = useTextEditingController();
-    final descriptionController = useTextEditingController();
+    
+    // Optional fields
+    final seatsController = useTextEditingController(text: vehicle.seats?.toString() ?? '');
+    final doorsController = useTextEditingController(text: vehicle.doors?.toString() ?? '');
+    final engineController = useTextEditingController(text: vehicle.engine ?? '');
+    final descriptionController = useTextEditingController(text: vehicle.description ?? '');
 
     final selectedLocation = useState<Location?>(null);
-    final isAutomatic = useState<bool>(true);
-    final selectedFuel = useState<String>('Diesel');
-    final hasAc = useState<bool>(true);
+    final isAutomatic = useState<bool>(vehicle.transmission == 'Automatic');
+    final selectedFuel = useState<String>(vehicle.fuelType);
+    final hasAc = useState<bool>(vehicle.hasAc);
     final isSaving = useState<bool>(false);
     final errorMessage = useState<String?>(null);
 
-    // Multiple image URLs list
-    final imageUrls = useState<List<String>>([]);
+    // Multiple image URLs list pre-populated
+    final imageUrls = useState<List<String>>(List<String>.from(vehicle.imageUrls));
 
-    // Pre-populate first location when loaded
+    // Pre-populate location when loaded
     useEffect(() {
       locationsAsync.whenData((locations) {
         if (selectedLocation.value == null && locations.isNotEmpty) {
-          selectedLocation.value = locations.first;
+          selectedLocation.value = locations.firstWhere(
+            (l) => l.id == vehicle.locationId,
+            orElse: () => locations.first,
+          );
         }
       });
       return null;
@@ -100,11 +103,11 @@ class AddCarDialog extends HookConsumerWidget {
       backgroundColor: const Color(0xFF16162B),
       title: Row(
         children: [
-          const Icon(Icons.directions_car, color: Color(0xFF00CEC9)),
+          const Icon(Icons.edit_road, color: Color(0xFF00CEC9)),
           const SizedBox(width: 10),
-          Text(
-            tr('add_new_fleet_vehicle', ref),
-            style: const TextStyle(color: Colors.white, fontFamily: 'Outfit', fontWeight: FontWeight.bold),
+          const Text(
+            'Edit Vehicle Details',
+            style: TextStyle(color: Colors.white, fontFamily: 'Outfit', fontWeight: FontWeight.bold),
           ),
         ],
       ),
@@ -384,6 +387,7 @@ class AddCarDialog extends HookConsumerWidget {
                   }).toList(),
                   onChanged: (val) => selectedFuel.value = val ?? 'Diesel',
                 ),
+
                 const SizedBox(height: 16),
                 const Divider(color: Colors.white10),
                 const SizedBox(height: 8),
@@ -472,7 +476,6 @@ class AddCarDialog extends HookConsumerWidget {
                       allUrls.add(pendingUrl);
                     }
                     if (allUrls.isEmpty) {
-                      // Use a default placeholder if no image provided
                       allUrls.add('https://images.unsplash.com/photo-1549399542-7e3f8b79c341?auto=format&fit=crop&q=80&w=600');
                     }
 
@@ -480,8 +483,8 @@ class AddCarDialog extends HookConsumerWidget {
                     errorMessage.value = null;
 
                     try {
-                      final vehicle = Vehicle(
-                        id: const Uuid().v4(),
+                      final updated = Vehicle(
+                        id: vehicle.id,
                         brand: brandController.text.trim(),
                         model: modelController.text.trim(),
                         year: int.parse(yearController.text.trim()),
@@ -492,22 +495,22 @@ class AddCarDialog extends HookConsumerWidget {
                         imageUrl: allUrls.first,
                         imageUrls: allUrls,
                         locationId: selectedLocation.value!.id,
-                        partnerId: (partner != null && !isAdmin) ? partner.id : null,
+                        partnerId: vehicle.partnerId,
                         seats: int.tryParse(seatsController.text.trim()),
                         doors: int.tryParse(doorsController.text.trim()),
                         engine: engineController.text.trim().isNotEmpty ? engineController.text.trim() : null,
                         description: descriptionController.text.trim().isNotEmpty ? descriptionController.text.trim() : null,
                       );
 
-                      await ref.read(vehicleRepositoryProvider).addVehicle(vehicle);
+                      await ref.read(vehicleRepositoryProvider).updateVehicle(updated);
                       ref.invalidate(vehiclesListProvider);
 
                       if (context.mounted) {
                         Navigator.of(context).pop();
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            backgroundColor: const Color(0xFF00CEC9),
-                            content: Text(tr('vehicle_added', ref)),
+                          const SnackBar(
+                            backgroundColor: Color(0xFF00CEC9),
+                            content: Text('Vehicle updated successfully!'),
                           ),
                         );
                       }
@@ -524,7 +527,7 @@ class AddCarDialog extends HookConsumerWidget {
                   height: 20,
                   child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                 )
-              : Text(tr('save_vehicle', ref)),
+              : const Text('Save Changes'),
         ),
       ],
     );

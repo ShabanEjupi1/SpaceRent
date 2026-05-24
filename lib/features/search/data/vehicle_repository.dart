@@ -159,7 +159,38 @@ class VehicleRepository {
           'image_urls': vehicle.imageUrls,
           'location_id': vehicle.locationId,
           'partner_id': vehicle.partnerId,
+          'seats': vehicle.seats,
+          'doors': vehicle.doors,
+          'engine': vehicle.engine,
+          'description': vehicle.description,
         })
+        .select()
+        .single();
+    return Vehicle.fromJson(response);
+  }
+
+  /// Update an existing vehicle in the Supabase database
+  Future<Vehicle> updateVehicle(Vehicle vehicle) async {
+    final response = await _supabase
+        .from('vehicles')
+        .update({
+          'brand': vehicle.brand,
+          'model': vehicle.model,
+          'year': vehicle.year,
+          'transmission': vehicle.transmission,
+          'fuel_type': vehicle.fuelType,
+          'has_ac': vehicle.hasAc,
+          'price_per_day': vehicle.pricePerDay,
+          'image_url': vehicle.imageUrl,
+          'image_urls': vehicle.imageUrls,
+          'location_id': vehicle.locationId,
+          'partner_id': vehicle.partnerId,
+          'seats': vehicle.seats,
+          'doors': vehicle.doors,
+          'engine': vehicle.engine,
+          'description': vehicle.description,
+        })
+        .eq('id', vehicle.id)
         .select()
         .single();
     return Vehicle.fromJson(response);

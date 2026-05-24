@@ -11,6 +11,10 @@ class Vehicle {
   final List<String> imageUrls; // All images
   final String locationId;
   final String? partnerId;
+  final int? seats;
+  final int? doors;
+  final String? engine;
+  final String? description;
 
   Vehicle({
     required this.id,
@@ -25,6 +29,10 @@ class Vehicle {
     List<String>? imageUrls,
     required this.locationId,
     this.partnerId,
+    this.seats,
+    this.doors,
+    this.engine,
+    this.description,
   }) : imageUrls = imageUrls ?? (imageUrl.isNotEmpty ? [imageUrl] : []);
 
   factory Vehicle.fromJson(Map<String, dynamic> json) {
@@ -52,6 +60,10 @@ class Vehicle {
       imageUrls: urls,
       locationId: json['location_id'] as String,
       partnerId: json['partner_id'] as String?,
+      seats: json['seats'] as int?,
+      doors: json['doors'] as int?,
+      engine: json['engine'] as String?,
+      description: json['description'] as String?,
     );
   }
 
@@ -69,6 +81,10 @@ class Vehicle {
       'image_urls': imageUrls,
       'location_id': locationId,
       'partner_id': partnerId,
+      'seats': seats,
+      'doors': doors,
+      'engine': engine,
+      'description': description,
     };
   }
 }

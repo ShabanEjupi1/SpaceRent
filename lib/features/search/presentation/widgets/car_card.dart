@@ -117,24 +117,33 @@ class CarCard extends StatelessWidget {
                   const SizedBox(height: 12),
 
                   // Horizontal list of customized vehicle specs (Transmission, Fuel, AC)
-                  Row(
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
                     children: [
                       _SpecBadge(
                         icon: Icons.settings,
                         label: vehicle.transmission,
                       ),
-                      const SizedBox(width: 8),
                       _SpecBadge(
                         icon: Icons.local_gas_station,
                         label: vehicle.fuelType,
                       ),
-                      if (vehicle.hasAc) ...[
-                        const SizedBox(width: 8),
+                      if (vehicle.hasAc)
                         const _SpecBadge(
                           icon: Icons.ac_unit,
                           label: 'A/C',
                         ),
-                      ],
+                      if (vehicle.seats != null)
+                        _SpecBadge(
+                          icon: Icons.airline_seat_recline_normal,
+                          label: '${vehicle.seats} Seats',
+                        ),
+                      if (vehicle.doors != null)
+                        _SpecBadge(
+                          icon: Icons.sensor_door,
+                          label: '${vehicle.doors} Doors',
+                        ),
                     ],
                   ),
                 ],

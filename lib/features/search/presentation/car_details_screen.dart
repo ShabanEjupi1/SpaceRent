@@ -156,15 +156,35 @@ class CarDetailsScreen extends ConsumerWidget {
                           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                         ),
                         const SizedBox(height: 12),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
                           children: [
                             _DetailSpecTile(icon: Icons.settings, title: t['transmission']!, value: vehicle.transmission),
                             _DetailSpecTile(icon: Icons.local_gas_station, title: t['fuel']!, value: vehicle.fuelType),
                             _DetailSpecTile(icon: Icons.calendar_today, title: t['year']!, value: '${vehicle.year}'),
+                            if (vehicle.seats != null)
+                              _DetailSpecTile(icon: Icons.airline_seat_recline_normal, title: 'Seats', value: '${vehicle.seats}'),
+                            if (vehicle.doors != null)
+                              _DetailSpecTile(icon: Icons.sensor_door, title: 'Doors', value: '${vehicle.doors}'),
+                            if (vehicle.engine != null)
+                              _DetailSpecTile(icon: Icons.speed, title: 'Engine', value: vehicle.engine!),
                           ],
                         ),
                         const SizedBox(height: 24),
+
+                        if (vehicle.description != null && vehicle.description!.isNotEmpty) ...[
+                          const Text(
+                            'About Vehicle',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            vehicle.description!,
+                            style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.5),
+                          ),
+                          const SizedBox(height: 24),
+                        ],
 
                         // Perks List
                         Text(

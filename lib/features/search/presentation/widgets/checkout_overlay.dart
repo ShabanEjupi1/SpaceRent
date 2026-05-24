@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import '../../../bookings/data/booking_repository.dart';
 import '../../../bookings/domain/booking.dart';
 import '../../domain/vehicle.dart';
+import '../../../../core/l10n/locale_provider.dart';
 
 class CheckoutOverlay extends HookConsumerWidget {
   final Vehicle vehicle;
@@ -37,12 +38,55 @@ class CheckoutOverlay extends HookConsumerWidget {
     final paypalOrderId = useState<String?>(null);
     final paymentCaptured = useState(false);
     final errorMessage = useState<String?>(null);
+    final paymentMethod = useState<String>('Online'); // 'Online' or 'Cash'
 
     final startStr = DateFormat('dd MMM yyyy').format(startDate);
     final endStr = DateFormat('dd MMM yyyy').format(endDate);
     final days = endDate.difference(startDate).inDays;
 
     final supabase = ref.watch(supabaseClientProvider);
+
+    // Call database to submit Cash payment reservation
+    Future<void> confirmCashBooking() async {
+      isProcessing.value = true;
+      errorMessage.value = null;
+
+      try {
+        final bookingId = const Uuid().v4();
+        final booking = Booking(
+          id: bookingId,
+          vehicleId: vehicle.id,
+          userId: const Uuid().v4(), // Guest ID
+          startDate: startDate,
+          endDate: endDate,
+          totalPrice: totalPrice,
+          status: 'Pending',
+          fullName: fullName,
+          phoneNumber: phoneNumber,
+          emailAddress: emailAddress,
+          language: ref.read(localeProvider),
+          paymentStatus: 'Unpaid',
+          paymentMethod: 'Cash',
+        );
+
+        await ref.read(bookingRepositoryProvider).submitBooking(booking);
+
+        paymentCaptured.value = true;
+        
+        // Let user see success checkmark for a moment
+        Future.delayed(const Duration(milliseconds: 1500), () {
+          if (context.mounted) {
+            Navigator.of(context).pop(); // Close checkout overlay
+            onSuccess();
+          }
+        });
+
+      } catch (e) {
+        errorMessage.value = e.toString().replaceAll('Exception:', '').trim();
+      } finally {
+        isProcessing.value = false;
+      }
+    }
 
     // Call PayPal Edge Function to create order
     Future<void> initiatePayPalPayment() async {
@@ -103,8 +147,9 @@ class CheckoutOverlay extends HookConsumerWidget {
           fullName: fullName,
           phoneNumber: phoneNumber,
           emailAddress: emailAddress,
-          language: 'en', // default language
+          language: ref.read(localeProvider),
           paymentStatus: 'Unpaid',
+          paymentMethod: 'Online',
         );
 
         // Save booking client-side first so the backend capture can find it and update it
@@ -182,6 +227,63 @@ class CheckoutOverlay extends HookConsumerWidget {
               const SizedBox(height: 16),
 
               if (!paymentCaptured.value) ...[
+                // Payment Method Selector
+                Container(
+                  margin: const EdgeInsets.only(bottom: 20),
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.04),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white.withOpacity(0.06)),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            if (paypalOrderId.value == null) {
+                              paymentMethod.value = 'Online';
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            decoration: BoxDecoration(
+                              color: paymentMethod.value == 'Online' ? const Color(0xFF6C5CE7) : Colors.transparent,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            alignment: Alignment.center,
+                            child: const Text(
+                              'Pay Online',
+                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            if (paypalOrderId.value == null) {
+                              paymentMethod.value = 'Cash';
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            decoration: BoxDecoration(
+                              color: paymentMethod.value == 'Cash' ? const Color(0xFF00CEC9) : Colors.transparent,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            alignment: Alignment.center,
+                            child: const Text(
+                              'Pay in Hand',
+                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
                 // Booking Summary
                 Align(
                   alignment: Alignment.centerLeft,
@@ -272,7 +374,31 @@ class CheckoutOverlay extends HookConsumerWidget {
                 ],
 
                 // Action States
-                if (paypalOrderId.value == null) ...[
+                if (paymentMethod.value == 'Cash') ...[
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF00CEC9),
+                        foregroundColor: Colors.black,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                      onPressed: isProcessing.value ? null : confirmCashBooking,
+                      icon: isProcessing.value
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2),
+                            )
+                          : const Icon(Icons.handshake_outlined, size: 20),
+                      label: const Text(
+                        'Confirm Reservation (Pay in Hand)',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                    ),
+                  ),
+                ] else if (paypalOrderId.value == null) ...[
                   // Initial checkout launch
                   SizedBox(
                     width: double.infinity,

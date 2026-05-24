@@ -193,7 +193,50 @@ class PartnerApplicationsScreen extends ConsumerWidget {
                                           },
                                           child: const Text('Approve'),
                                         )
-                                      : const Icon(Icons.check, color: Colors.white30, size: 16),
+                                      : app.status == 'Approved'
+                                          ? TextButton.icon(
+                                              icon: const Icon(Icons.email, size: 14, color: Color(0xFF00CEC9)),
+                                              label: const Text('Resend Email', style: TextStyle(color: Color(0xFF00CEC9), fontSize: 12)),
+                                              onPressed: () async {
+                                                final token = app.inviteToken;
+                                                if (token == null || token.isEmpty) {
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                    const SnackBar(
+                                                      backgroundColor: Colors.redAccent,
+                                                      content: Text('No invite token generated for this application.'),
+                                                    ),
+                                                  );
+                                                  return;
+                                                }
+                                                try {
+                                                  final emailService = EmailService(ref.read(supabaseClientProvider));
+                                                  await emailService.sendPartnerInviteEmail(
+                                                    toEmail: app.email,
+                                                    companyName: app.companyName,
+                                                    contactName: app.contactName,
+                                                    inviteToken: token,
+                                                  );
+                                                  if (context.mounted) {
+                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                      SnackBar(
+                                                        backgroundColor: const Color(0xFF00CEC9),
+                                                        content: Text('Invite email resent to ${app.email}!'),
+                                                      ),
+                                                    );
+                                                  }
+                                                } catch (e) {
+                                                  if (context.mounted) {
+                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                      SnackBar(
+                                                        backgroundColor: Colors.redAccent,
+                                                        content: Text('Error sending email: $e'),
+                                                      ),
+                                                    );
+                                                  }
+                                                }
+                                              },
+                                            )
+                                          : const Icon(Icons.check, color: Colors.white30, size: 16),
                                 ),
                               ],
                             );

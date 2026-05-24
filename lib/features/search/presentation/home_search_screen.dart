@@ -3,6 +3,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../fleet/data/partner_repository.dart';
 import '../data/vehicle_repository.dart';
 import '../domain/location.dart';
@@ -379,8 +380,30 @@ class HomeSearchScreen extends HookConsumerWidget {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C5CE7)),
-            onPressed: () {
-              if (controller.text.trim() == '2026') {
+            onPressed: () async {
+              final input = controller.text.trim();
+              bool isValid = false;
+              try {
+                final response = await Supabase.instance.client
+                    .from('profiles')
+                    .select()
+                    .eq('role', 'Admin');
+                if (response.isNotEmpty) {
+                  final adminProfile = response.first;
+                  final dbPass = adminProfile['passcode'] as String?;
+                  if (dbPass != null && dbPass.isNotEmpty) {
+                    isValid = (input == dbPass);
+                  } else {
+                    isValid = (input == '2026');
+                  }
+                } else {
+                  isValid = (input == '2026');
+                }
+              } catch (_) {
+                isValid = (input == '2026');
+              }
+
+              if (isValid) {
                 ref.read(isAdminProvider.notifier).state = true;
                 Navigator.of(context).pop();
                 context.go('/admin');

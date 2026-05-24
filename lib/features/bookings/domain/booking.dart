@@ -13,6 +13,7 @@ class Booking {
   final String paymentStatus; // 'Unpaid', 'Paid'
   final String? paypalOrderId;
   final DateTime? paidAt;
+  final String paymentMethod; // 'Online', 'Cash'
 
   Booking({
     required this.id,
@@ -29,6 +30,7 @@ class Booking {
     this.paymentStatus = 'Unpaid',
     this.paypalOrderId,
     this.paidAt,
+    this.paymentMethod = 'Online',
   });
 
   factory Booking.fromJson(Map<String, dynamic> json) {
@@ -47,6 +49,7 @@ class Booking {
       paymentStatus: json['payment_status'] as String? ?? 'Unpaid',
       paypalOrderId: json['paypal_order_id'] as String?,
       paidAt: json['paid_at'] != null ? DateTime.parse(json['paid_at'] as String) : null,
+      paymentMethod: json['payment_method'] as String? ?? 'Online',
     );
   }
 
@@ -66,6 +69,7 @@ class Booking {
       'payment_status': paymentStatus,
       'paypal_order_id': paypalOrderId,
       'paid_at': paidAt?.toIso8601String(),
+      'payment_method': paymentMethod,
     };
   }
 }

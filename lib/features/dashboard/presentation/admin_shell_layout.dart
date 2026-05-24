@@ -24,7 +24,7 @@ class AdminShellLayout extends ConsumerWidget {
     int getSelectedIndex() {
       if (location == '/admin') return 0;
       if (location.startsWith('/admin/fleet')) return 1;
-      if (location.startsWith('/admin/bookings')) return 2;
+      if (location.startsWith('/admin/database')) return 2;
       if (location.startsWith('/admin/applications')) return 3;
       return 0;
     }
@@ -204,18 +204,18 @@ class AdminShellLayout extends ConsumerWidget {
             context.go('/admin/fleet');
           },
         ),
-        const SizedBox(height: 8),
-        _SidebarMenuItem(
-          icon: Icons.assignment_outlined,
-          activeIcon: Icons.assignment,
-          title: tr('live_bookings', ref),
-          isActive: selectedIndex == 2,
-          onTap: () {
-            if (isDrawer) Navigator.of(context).pop();
-            context.go('/admin/bookings');
-          },
-        ),
         if (partner == null) ...[
+          const SizedBox(height: 8),
+          _SidebarMenuItem(
+            icon: Icons.storage_outlined,
+            activeIcon: Icons.storage,
+            title: 'Database Explorer',
+            isActive: selectedIndex == 2,
+            onTap: () {
+              if (isDrawer) Navigator.of(context).pop();
+              context.go('/admin/database');
+            },
+          ),
           const SizedBox(height: 8),
           _SidebarMenuItem(
             icon: Icons.people_outline,

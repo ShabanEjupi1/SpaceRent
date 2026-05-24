@@ -5,7 +5,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../features/dashboard/presentation/admin_shell_layout.dart';
 import '../features/dashboard/presentation/dashboard_home_screen.dart';
 import '../features/fleet/presentation/fleet_manager_screen.dart';
-import '../features/bookings/presentation/live_bookings_screen.dart';
+import '../features/dashboard/presentation/database_explorer_screen.dart';
 import '../features/search/presentation/home_search_screen.dart';
 import '../features/search/presentation/search_results_screen.dart';
 import '../features/search/presentation/car_details_screen.dart';
@@ -108,9 +108,9 @@ GoRouter router(RouterRef ref) {
             builder: (context, state) => const FleetManagerScreen(),
           ),
           GoRoute(
-            path: '/admin/bookings',
-            name: 'admin_bookings',
-            builder: (context, state) => const LiveBookingsScreen(),
+            path: '/admin/database',
+            name: 'admin_database',
+            builder: (context, state) => const DatabaseExplorerScreen(),
           ),
           GoRoute(
             path: '/admin/applications',

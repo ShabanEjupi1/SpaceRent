@@ -3,6 +3,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/l10n/locale_provider.dart';
 import '../../bookings/data/admin_booking_repository.dart';
@@ -13,6 +14,7 @@ import '../../fleet/data/profile_repository.dart';
 import '../../fleet/domain/partner.dart';
 import '../../fleet/domain/profile.dart';
 import '../../fleet/presentation/widgets/add_car_dialog.dart';
+import '../../fleet/presentation/widgets/edit_car_dialog.dart';
 import '../../notifications/email_service.dart';
 import '../../search/data/vehicle_repository.dart';
 import '../../search/domain/location.dart';
@@ -95,21 +97,39 @@ class DashboardHomeScreen extends HookConsumerWidget {
                     ],
                   );
 
-                  final actionButton = ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF6C5CE7),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    onPressed: () {
-                      showDialog(
-                        context: context,
-                        builder: (context) => const AddCarDialog(),
-                      );
-                    },
-                    icon: const Icon(Icons.add, size: 18),
-                    label: Text(tr('add_vehicle', ref), style: const TextStyle(fontWeight: FontWeight.bold)),
+                  final actionButtonsRow = Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF6C5CE7),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () {
+                          showDialog(
+                            context: context,
+                            builder: (context) => const AddCarDialog(),
+                          );
+                        },
+                        icon: const Icon(Icons.add, size: 18),
+                        label: Text(tr('add_vehicle', ref), style: const TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white.withOpacity(0.04),
+                          foregroundColor: Colors.white,
+                          side: BorderSide(color: Colors.white.withOpacity(0.08)),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () => _showProfileSettingsDialog(context, ref),
+                        icon: const Icon(Icons.settings, size: 18, color: Color(0xFF00CEC9)),
+                        label: const Text('My Settings', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ],
                   );
 
                   if (isMobile) {
@@ -118,10 +138,7 @@ class DashboardHomeScreen extends HookConsumerWidget {
                       children: [
                         headerContent,
                         const SizedBox(height: 16),
-                        SizedBox(
-                          width: double.infinity,
-                          child: actionButton,
-                        ),
+                        actionButtonsRow,
                       ],
                     );
                   }
@@ -131,7 +148,7 @@ class DashboardHomeScreen extends HookConsumerWidget {
                     children: [
                       Expanded(child: headerContent),
                       const SizedBox(width: 16),
-                      actionButton,
+                      actionButtonsRow,
                     ],
                   );
                 },
@@ -424,6 +441,10 @@ class DashboardHomeScreen extends HookConsumerWidget {
               final actionButtons = Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  IconButton(
+                    icon: const Icon(Icons.edit, color: Color(0xFF00CEC9), size: 20),
+                    onPressed: () => _showEditPartnerDialog(context, ref, p),
+                  ),
                   IconButton(
                     icon: Icon(
                       isSuspended ? Icons.play_arrow : Icons.pause,
@@ -885,9 +906,23 @@ class DashboardHomeScreen extends HookConsumerWidget {
                       ),
                     ),
                     DataCell(
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),
-                        onPressed: () => _showDeleteVehicleDialog(context, ref, vehicle),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit_note, color: Color(0xFF00CEC9), size: 20),
+                            onPressed: () {
+                              showDialog(
+                                context: context,
+                                builder: (context) => EditCarDialog(vehicle: vehicle),
+                              );
+                            },
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),
+                            onPressed: () => _showDeleteVehicleDialog(context, ref, vehicle),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -1366,6 +1401,288 @@ class DashboardHomeScreen extends HookConsumerWidget {
             ],
           );
         },
+      ),
+    );
+  }
+
+  void _showEditPartnerDialog(BuildContext context, WidgetRef ref, Partner p) {
+    final companyController = TextEditingController(text: p.companyName);
+    final contactController = TextEditingController(text: p.contactName);
+    final emailController = TextEditingController(text: p.email);
+    final phoneController = TextEditingController(text: p.phone);
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) {
+          final isSubActive = p.subscriptionStatus == 'Active';
+          final subExpires = p.subscriptionExpiresAt;
+          final expStr = subExpires != null ? DateFormat('dd MMM yyyy').format(subExpires) : 'N/A';
+
+          return AlertDialog(
+            backgroundColor: const Color(0xFF16162B),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Text('Edit Partner: ${p.companyName}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: companyController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: const InputDecoration(labelText: 'Company Name', labelStyle: TextStyle(color: Colors.white60)),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: contactController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: const InputDecoration(labelText: 'Contact Name', labelStyle: TextStyle(color: Colors.white60)),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: emailController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: const InputDecoration(labelText: 'Email Address', labelStyle: TextStyle(color: Colors.white60)),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: phoneController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: const InputDecoration(labelText: 'Phone / Password', labelStyle: TextStyle(color: Colors.white60)),
+                  ),
+                  const SizedBox(height: 20),
+                  
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.02),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.white.withOpacity(0.06)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Subscription Status:', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                            Text(
+                              p.subscriptionStatus,
+                              style: TextStyle(
+                                color: isSubActive ? const Color(0xFF00CEC9) : Colors.redAccent,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Expires:', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                            Text(expStr, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 36,
+                          child: isSubActive
+                              ? ElevatedButton(
+                                  style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent.withOpacity(0.2), foregroundColor: Colors.redAccent),
+                                  onPressed: () async {
+                                    try {
+                                      await Supabase.instance.client
+                                          .from('partners')
+                                          .update({
+                                            'subscription_status': 'Inactive',
+                                            'subscription_expires_at': null,
+                                            'paypal_subscription_id': null,
+                                          })
+                                          .eq('id', p.id);
+                                      ref.invalidate(partnersListProvider);
+                                      Navigator.of(context).pop();
+                                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Subscription Stopped')));
+                                    } catch (e) {
+                                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                                    }
+                                  },
+                                  child: const Text('Stop Subscription', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                )
+                              : ElevatedButton(
+                                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green.withOpacity(0.2), foregroundColor: Colors.greenAccent),
+                                  onPressed: () async {
+                                    try {
+                                      final exp = DateTime.now().add(const Duration(days: 30)).toIso8601String();
+                                      await Supabase.instance.client
+                                          .from('partners')
+                                          .update({
+                                            'subscription_status': 'Active',
+                                            'subscription_expires_at': exp,
+                                            'paypal_subscription_id': 'MANUAL_CASH',
+                                          })
+                                          .eq('id', p.id);
+                                      ref.invalidate(partnersListProvider);
+                                      Navigator.of(context).pop();
+                                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Subscription Activated')));
+                                    } catch (e) {
+                                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                                    }
+                                  },
+                                  child: const Text('Activate (Cash Payment)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel', style: TextStyle(color: Colors.white54))),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C5CE7)),
+                onPressed: () async {
+                  try {
+                    await Supabase.instance.client
+                        .from('partners')
+                        .update({
+                          'company_name': companyController.text.trim(),
+                          'contact_name': contactController.text.trim(),
+                          'email': emailController.text.trim(),
+                          'phone': phoneController.text.trim(),
+                        })
+                        .eq('id', p.id);
+                    ref.invalidate(partnersListProvider);
+                    Navigator.of(context).pop();
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Partner updated successfully')));
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                  }
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _showProfileSettingsDialog(BuildContext context, WidgetRef ref) async {
+    final partner = ref.read(currentPartnerProvider);
+    final isUserAdmin = partner == null;
+    final supabase = ref.read(supabaseClientProvider);
+
+    final emailController = TextEditingController();
+    final passcodeController = TextEditingController();
+    final companyController = TextEditingController();
+    final contactController = TextEditingController();
+    final phoneController = TextEditingController();
+
+    if (isUserAdmin) {
+      emailController.text = 'shaban.ejj@gmail.com';
+      passcodeController.text = '2026';
+      try {
+        final res = await supabase.from('profiles').select().eq('role', 'Admin').single();
+        emailController.text = res['email'] as String? ?? 'shaban.ejj@gmail.com';
+        passcodeController.text = res['passcode'] as String? ?? '2026';
+      } catch (_) {}
+    } else {
+      companyController.text = partner.companyName;
+      contactController.text = partner.contactName;
+      emailController.text = partner.email;
+      phoneController.text = partner.phone;
+    }
+
+    if (!context.mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF16162B),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(isUserAdmin ? 'Admin Profile Settings' : 'Partner Profile Settings', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isUserAdmin) ...[
+                TextField(
+                  controller: emailController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(labelText: 'Admin Email', labelStyle: TextStyle(color: Colors.white60)),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: passcodeController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(labelText: 'Admin Passcode', labelStyle: TextStyle(color: Colors.white60)),
+                ),
+              ] else ...[
+                TextField(
+                  controller: companyController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(labelText: 'Company Name', labelStyle: TextStyle(color: Colors.white60)),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: contactController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(labelText: 'Contact Name', labelStyle: TextStyle(color: Colors.white60)),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: emailController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(labelText: 'Email Address', labelStyle: TextStyle(color: Colors.white60)),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: phoneController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(labelText: 'Phone / Password', labelStyle: TextStyle(color: Colors.white60)),
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel', style: TextStyle(color: Colors.white54))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C5CE7)),
+            onPressed: () async {
+              try {
+                if (isUserAdmin) {
+                  await supabase.from('profiles').update({
+                    'email': emailController.text.trim(),
+                    'passcode': passcodeController.text.trim(),
+                  }).eq('role', 'Admin');
+                  ref.invalidate(profilesListProvider);
+                } else {
+                  final response = await supabase.from('partners').update({
+                    'company_name': companyController.text.trim(),
+                    'contact_name': contactController.text.trim(),
+                    'email': emailController.text.trim(),
+                    'phone': phoneController.text.trim(),
+                  }).eq('id', partner.id).select().single();
+                  ref.read(currentPartnerProvider.notifier).state = Partner.fromJson(response);
+                  ref.invalidate(partnersListProvider);
+                }
+                if (context.mounted) {
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile updated successfully!')));
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                }
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
       ),
     );
   }
