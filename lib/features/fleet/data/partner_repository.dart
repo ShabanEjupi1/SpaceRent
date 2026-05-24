@@ -197,6 +197,78 @@ class PartnerRepository {
       rethrow;
     }
   }
+
+  /// Submits a profile change request
+  Future<void> submitProfileChangeRequest(ProfileChangeRequest req) async {
+    try {
+      await _supabase.from('profile_change_requests').insert({
+        'partner_id': req.partnerId,
+        'company_name': req.companyName,
+        'contact_name': req.contactName,
+        'email': req.email,
+        'phone': req.phone,
+        'status': 'Pending',
+      });
+    } catch (e) {
+      if (e.toString().contains('placeholder')) return;
+      rethrow;
+    }
+  }
+
+  /// Fetches all profile change requests
+  Future<List<ProfileChangeRequest>> fetchProfileChangeRequests() async {
+    try {
+      final response = await _supabase
+          .from('profile_change_requests')
+          .select()
+          .order('created_at', ascending: false);
+      final list = response as List;
+      return list.map((json) => ProfileChangeRequest.fromJson(json)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Approves a profile change request: applies changes to partners table, then sets status to 'Approved'
+  Future<void> approveProfileChangeRequest(String requestId, String partnerId, {
+    String? companyName,
+    String? contactName,
+    String? email,
+    String? phone,
+  }) async {
+    try {
+      final Map<String, dynamic> updates = {};
+      if (companyName != null && companyName.isNotEmpty) updates['company_name'] = companyName;
+      if (contactName != null && contactName.isNotEmpty) updates['contact_name'] = contactName;
+      if (email != null && email.isNotEmpty) updates['email'] = email;
+      if (phone != null && phone.isNotEmpty) updates['phone'] = phone;
+
+      if (updates.isNotEmpty) {
+        await _supabase.from('partners').update(updates).eq('id', partnerId);
+      }
+
+      await _supabase
+          .from('profile_change_requests')
+          .update({'status': 'Approved'})
+          .eq('id', requestId);
+    } catch (e) {
+      if (e.toString().contains('placeholder')) return;
+      rethrow;
+    }
+  }
+
+  /// Rejects a profile change request
+  Future<void> rejectProfileChangeRequest(String id) async {
+    try {
+      await _supabase
+          .from('profile_change_requests')
+          .update({'status': 'Rejected'})
+          .eq('id', id);
+    } catch (e) {
+      if (e.toString().contains('placeholder')) return;
+      rethrow;
+    }
+  }
 }
 
 @riverpod
@@ -205,14 +277,19 @@ PartnerRepository partnerRepository(PartnerRepositoryRef ref) {
   return PartnerRepository(client);
 }
 
-@riverpod
+@Riverpod(keepAlive: true)
 Future<List<PartnerApplication>> partnerApplicationsList(PartnerApplicationsListRef ref) {
   return ref.watch(partnerRepositoryProvider).fetchApplications();
 }
 
-@riverpod
+@Riverpod(keepAlive: true)
 Future<List<Partner>> partnersList(PartnersListRef ref) {
   return ref.watch(partnerRepositoryProvider).fetchPartners();
+}
+
+@Riverpod(keepAlive: true)
+Future<List<ProfileChangeRequest>> profileChangeRequestsList(ProfileChangeRequestsListRef ref) {
+  return ref.watch(partnerRepositoryProvider).fetchProfileChangeRequests();
 }
 
 // Global authentication states for SpaceRent Ecosystem

@@ -46,12 +46,38 @@ class CheckoutOverlay extends HookConsumerWidget {
 
     final supabase = ref.watch(supabaseClientProvider);
 
+    Future<String> getInitialBookingStatus() async {
+      try {
+        if (vehicle.partnerId != null) {
+          final res = await supabase
+              .from('partners')
+              .select('auto_confirm')
+              .eq('id', vehicle.partnerId!)
+              .maybeSingle();
+          if (res != null && res['auto_confirm'] == true) {
+            return 'Confirmed';
+          }
+        } else {
+          final res = await supabase
+              .from('profiles')
+              .select('auto_confirm')
+              .eq('role', 'Admin')
+              .maybeSingle();
+          if (res != null && res['auto_confirm'] == true) {
+            return 'Confirmed';
+          }
+        }
+      } catch (_) {}
+      return 'Pending';
+    }
+
     // Call database to submit Cash payment reservation
     Future<void> confirmCashBooking() async {
       isProcessing.value = true;
       errorMessage.value = null;
 
       try {
+        final initialStatus = await getInitialBookingStatus();
         final bookingId = const Uuid().v4();
         final booking = Booking(
           id: bookingId,
@@ -60,7 +86,7 @@ class CheckoutOverlay extends HookConsumerWidget {
           startDate: startDate,
           endDate: endDate,
           totalPrice: totalPrice,
-          status: 'Pending',
+          status: initialStatus,
           fullName: fullName,
           phoneNumber: phoneNumber,
           emailAddress: emailAddress,
@@ -134,7 +160,8 @@ class CheckoutOverlay extends HookConsumerWidget {
       errorMessage.value = null;
 
       try {
-        // 1. First pre-create the booking in 'Pending' with 'Unpaid'
+        // 1. First pre-create the booking with appropriate status and 'Unpaid'
+        final initialStatus = await getInitialBookingStatus();
         final bookingId = const Uuid().v4();
         final booking = Booking(
           id: bookingId,
@@ -143,7 +170,7 @@ class CheckoutOverlay extends HookConsumerWidget {
           startDate: startDate,
           endDate: endDate,
           totalPrice: totalPrice,
-          status: 'Pending',
+          status: initialStatus,
           fullName: fullName,
           phoneNumber: phoneNumber,
           emailAddress: emailAddress,

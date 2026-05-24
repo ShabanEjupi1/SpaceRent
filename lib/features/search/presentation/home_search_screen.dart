@@ -379,7 +379,10 @@ class HomeSearchScreen extends HookConsumerWidget {
             child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C5CE7)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF6C5CE7),
+              foregroundColor: Colors.white,
+            ),
             onPressed: () async {
               final input = controller.text.trim();
               bool isValid = false;

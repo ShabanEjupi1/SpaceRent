@@ -8,6 +8,7 @@ class Partner {
   final String subscriptionStatus; // 'Active', 'Inactive', 'Cancelled'
   final DateTime? subscriptionExpiresAt;
   final String? paypalSubscriptionId;
+  final bool autoConfirm;
 
   Partner({
     required this.id,
@@ -19,6 +20,7 @@ class Partner {
     this.subscriptionStatus = 'Inactive',
     this.subscriptionExpiresAt,
     this.paypalSubscriptionId,
+    this.autoConfirm = false,
   });
 
   factory Partner.fromJson(Map<String, dynamic> json) {
@@ -34,6 +36,7 @@ class Partner {
           ? DateTime.parse(json['subscription_expires_at'] as String) 
           : null,
       paypalSubscriptionId: json['paypal_subscription_id'] as String?,
+      autoConfirm: json['auto_confirm'] as bool? ?? false,
     );
   }
 
@@ -48,6 +51,7 @@ class Partner {
       'subscription_status': subscriptionStatus,
       'subscription_expires_at': subscriptionExpiresAt?.toIso8601String(),
       'paypal_subscription_id': paypalSubscriptionId,
+      'auto_confirm': autoConfirm,
     };
   }
 }
@@ -92,6 +96,54 @@ class PartnerApplication {
       'phone': phone,
       'status': status,
       'invite_token': inviteToken,
+    };
+  }
+}
+
+class ProfileChangeRequest {
+  final String id;
+  final String partnerId;
+  final String? companyName;
+  final String? contactName;
+  final String? email;
+  final String? phone;
+  final String status;
+  final DateTime createdAt;
+
+  ProfileChangeRequest({
+    required this.id,
+    required this.partnerId,
+    this.companyName,
+    this.contactName,
+    this.email,
+    this.phone,
+    required this.status,
+    required this.createdAt,
+  });
+
+  factory ProfileChangeRequest.fromJson(Map<String, dynamic> json) {
+    return ProfileChangeRequest(
+      id: json['id'] as String,
+      partnerId: json['partner_id'] as String,
+      companyName: json['company_name'] as String?,
+      contactName: json['contact_name'] as String?,
+      email: json['email'] as String?,
+      phone: json['phone'] as String?,
+      status: json['status'] as String,
+      createdAt: DateTime.parse(json['created_at'] as String),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'partner_id': partnerId,
+      'company_name': companyName,
+      'contact_name': contactName,
+      'email': email,
+      'phone': phone,
+      'status': status,
+      'created_at': createdAt.toIso8601String(),
     };
   }
 }

@@ -250,12 +250,12 @@ VehicleRepository vehicleRepository(VehicleRepositoryRef ref) {
   return VehicleRepository(client);
 }
 
-@riverpod
+@Riverpod(keepAlive: true)
 Future<List<Location>> locations(LocationsRef ref) {
   return ref.watch(vehicleRepositoryProvider).fetchLocations();
 }
 
-@riverpod
+@Riverpod(keepAlive: true)
 Future<List<Vehicle>> vehiclesList(VehiclesListRef ref, {String? locationId}) {
   return ref.watch(vehicleRepositoryProvider).fetchVehicles(locationId: locationId);
 }

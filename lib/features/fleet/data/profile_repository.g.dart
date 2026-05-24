@@ -22,11 +22,11 @@ final profileRepositoryProvider =
 );
 
 typedef ProfileRepositoryRef = AutoDisposeProviderRef<ProfileRepository>;
-String _$profilesListHash() => r'62571fc4eefdb1d7c17dfdeda679274b1853408c';
+String _$profilesListHash() => r'4b2e197b81e94bdccdb469a9db4cbf45dcb9b9f3';
 
 /// See also [profilesList].
 @ProviderFor(profilesList)
-final profilesListProvider = AutoDisposeFutureProvider<List<Profile>>.internal(
+final profilesListProvider = FutureProvider<List<Profile>>.internal(
   profilesList,
   name: r'profilesListProvider',
   debugGetCreateSourceHash:
@@ -35,6 +35,6 @@ final profilesListProvider = AutoDisposeFutureProvider<List<Profile>>.internal(
   allTransitiveDependencies: null,
 );
 
-typedef ProfilesListRef = AutoDisposeFutureProviderRef<List<Profile>>;
+typedef ProfilesListRef = FutureProviderRef<List<Profile>>;
 // ignore_for_file: type=lint
 // ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member

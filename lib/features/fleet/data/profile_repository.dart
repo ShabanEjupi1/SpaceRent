@@ -83,7 +83,7 @@ ProfileRepository profileRepository(ProfileRepositoryRef ref) {
   return ProfileRepository(client);
 }
 
-@riverpod
+@Riverpod(keepAlive: true)
 Future<List<Profile>> profilesList(ProfilesListRef ref) {
   return ref.watch(profileRepositoryProvider).fetchProfiles();
 }

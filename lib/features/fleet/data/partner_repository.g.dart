@@ -23,12 +23,12 @@ final partnerRepositoryProvider =
 
 typedef PartnerRepositoryRef = AutoDisposeProviderRef<PartnerRepository>;
 String _$partnerApplicationsListHash() =>
-    r'3e6a66fa239dc0186ffc014d247614ab3380b5b2';
+    r'6238d386ab05b89da9d089b6ae269c3dd066beb2';
 
 /// See also [partnerApplicationsList].
 @ProviderFor(partnerApplicationsList)
 final partnerApplicationsListProvider =
-    AutoDisposeFutureProvider<List<PartnerApplication>>.internal(
+    FutureProvider<List<PartnerApplication>>.internal(
   partnerApplicationsList,
   name: r'partnerApplicationsListProvider',
   debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
@@ -39,12 +39,12 @@ final partnerApplicationsListProvider =
 );
 
 typedef PartnerApplicationsListRef
-    = AutoDisposeFutureProviderRef<List<PartnerApplication>>;
-String _$partnersListHash() => r'392b3234b285eb851f4d1414cf62ce4564f21a2c';
+    = FutureProviderRef<List<PartnerApplication>>;
+String _$partnersListHash() => r'e9a879bbcf612b161f4b957e4d6842b49f70a75d';
 
 /// See also [partnersList].
 @ProviderFor(partnersList)
-final partnersListProvider = AutoDisposeFutureProvider<List<Partner>>.internal(
+final partnersListProvider = FutureProvider<List<Partner>>.internal(
   partnersList,
   name: r'partnersListProvider',
   debugGetCreateSourceHash:
@@ -53,7 +53,25 @@ final partnersListProvider = AutoDisposeFutureProvider<List<Partner>>.internal(
   allTransitiveDependencies: null,
 );
 
-typedef PartnersListRef = AutoDisposeFutureProviderRef<List<Partner>>;
+typedef PartnersListRef = FutureProviderRef<List<Partner>>;
+String _$profileChangeRequestsListHash() =>
+    r'5ca3119a384f1bbf5fe86145d5a352f9e7fa5c65';
+
+/// See also [profileChangeRequestsList].
+@ProviderFor(profileChangeRequestsList)
+final profileChangeRequestsListProvider =
+    FutureProvider<List<ProfileChangeRequest>>.internal(
+  profileChangeRequestsList,
+  name: r'profileChangeRequestsListProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$profileChangeRequestsListHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+typedef ProfileChangeRequestsListRef
+    = FutureProviderRef<List<ProfileChangeRequest>>;
 String _$partnerDetailsHash() => r'5b4f9783bc80b7f982f6ac8321ee8411ec0b3a7f';
 
 /// Copied from Dart SDK

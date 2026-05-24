@@ -186,7 +186,11 @@ class DashboardHomeScreen extends HookConsumerWidget {
                   _buildActivePartnersSection(context, ref, partnersAsync),
                   const SizedBox(height: 24),
 
-                  // 3. Support Requests
+                  // 3. Profile Change Requests
+                  _buildProfileChangeRequestsSection(context, ref),
+                  const SizedBox(height: 24),
+
+                  // 4. Support Requests
                   _buildSupportRequestsSection(context, ref, supportRequests),
                   const SizedBox(height: 24),
 
@@ -399,7 +403,140 @@ class DashboardHomeScreen extends HookConsumerWidget {
     );
   }
 
-  // --- 3. Active Partners list ---
+  // --- 2b. Profile Change Requests list ---
+  Widget _buildProfileChangeRequestsSection(BuildContext context, WidgetRef ref) {
+    final requestsAsync = ref.watch(profileChangeRequestsListProvider);
+
+    return _SectionCard(
+      title: 'Profile Change Requests',
+      icon: Icons.assignment_late_outlined,
+      child: requestsAsync.when(
+        data: (requests) {
+          final pendingReqs = requests.where((r) => r.status == 'Pending').toList();
+          if (pendingReqs.isEmpty) {
+            return const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 24.0),
+                child: Text('No pending profile change requests.', style: TextStyle(color: Colors.white30, fontSize: 13)),
+              ),
+            );
+          }
+
+          final partners = ref.watch(partnersListProvider).value ?? [];
+
+          return ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: pendingReqs.length,
+            separatorBuilder: (c, i) => Divider(color: Colors.white.withOpacity(0.04)),
+            itemBuilder: (context, index) {
+              final req = pendingReqs[index];
+              final partnerObj = partners.firstWhere(
+                (p) => p.id == req.partnerId,
+                orElse: () => Partner(id: '', companyName: 'Unknown', contactName: '', email: '', phone: '', status: ''),
+              );
+
+              return Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.02),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          partnerObj.companyName,
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
+                        Text(
+                          DateFormat('dd MMM yyyy HH:mm').format(req.createdAt),
+                          style: const TextStyle(color: Colors.white30, fontSize: 11),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    const Text('Requested Updates:', style: TextStyle(color: Color(0xFF00CEC9), fontWeight: FontWeight.bold, fontSize: 12)),
+                    const SizedBox(height: 6),
+                    if (req.companyName != null && req.companyName != partnerObj.companyName)
+                      Text('• Company Name: ${partnerObj.companyName} ➔ ${req.companyName}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                    if (req.contactName != null && req.contactName != partnerObj.contactName)
+                      Text('• Contact Name: ${partnerObj.contactName} ➔ ${req.contactName}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                    if (req.email != null && req.email != partnerObj.email)
+                      Text('• Email: ${partnerObj.email} ➔ ${req.email}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                    if (req.phone != null && req.phone != partnerObj.phone)
+                      Text('• Password: ${partnerObj.phone} ➔ ${req.phone}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
+                          onPressed: () async {
+                            try {
+                              await ref.read(partnerRepositoryProvider).rejectProfileChangeRequest(req.id);
+                              ref.invalidate(profileChangeRequestsListProvider);
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Request Rejected.')));
+                              }
+                            } catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                              }
+                            }
+                          },
+                          child: const Text('Reject', style: TextStyle(fontWeight: FontWeight.bold)),
+                        ),
+                        const SizedBox(width: 12),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF6C5CE7),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          onPressed: () async {
+                            try {
+                              await ref.read(partnerRepositoryProvider).approveProfileChangeRequest(
+                                req.id,
+                                req.partnerId,
+                                companyName: req.companyName,
+                                contactName: req.contactName,
+                                email: req.email,
+                                phone: req.phone,
+                              );
+                              ref.invalidate(partnersListProvider);
+                              ref.invalidate(profileChangeRequestsListProvider);
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                                  backgroundColor: Color(0xFF00CEC9),
+                                  content: Text('Request Approved & Profile Updated!'),
+                                ));
+                              }
+                            } catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                              }
+                            }
+                          },
+                          child: const Text('Approve', style: TextStyle(fontWeight: FontWeight.bold)),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+        loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF6C5CE7))),
+        error: (err, _) => Center(child: Text('Error: $err', style: const TextStyle(color: Colors.redAccent))),
+      ),
+    );
+  }
+
   Widget _buildActivePartnersSection(
     BuildContext context,
     WidgetRef ref,
@@ -770,6 +907,11 @@ class DashboardHomeScreen extends HookConsumerWidget {
                 },
               );
 
+              final editButton = IconButton(
+                icon: const Icon(Icons.edit, color: Color(0xFF00CEC9), size: 18),
+                onPressed: () => _showEditProfileDialog(context, ref, profile),
+              );
+
               if (isMobile) {
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -786,13 +928,19 @@ class DashboardHomeScreen extends HookConsumerWidget {
                           ],
                         ),
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.05),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: roleDropdown,
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.05),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: roleDropdown,
+                          ),
+                          editButton,
+                        ],
                       ),
                     ],
                   ),
@@ -802,13 +950,114 @@ class DashboardHomeScreen extends HookConsumerWidget {
               return ListTile(
                 title: Text(profile.email, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
                 subtitle: Text('ID: ${profile.id}', style: const TextStyle(color: Colors.white54, fontSize: 11)),
-                trailing: roleDropdown,
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    roleDropdown,
+                    const SizedBox(width: 8),
+                    editButton,
+                  ],
+                ),
               );
             },
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, s) => Text('Error: $e'),
+      ),
+    );
+  }
+
+  void _showEditProfileDialog(BuildContext context, WidgetRef ref, Profile profile) {
+    final emailController = TextEditingController(text: profile.email);
+    final passcodeController = TextEditingController();
+    final supabase = ref.read(supabaseClientProvider);
+    bool isPrefilling = true;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) {
+          if (isPrefilling) {
+            isPrefilling = false;
+            supabase.from('profiles').select('passcode').eq('id', profile.id).maybeSingle().then((res) {
+              if (res != null && res['passcode'] != null) {
+                if (context.mounted) {
+                  setState(() {
+                    passcodeController.text = res['passcode'] as String;
+                  });
+                }
+              }
+            });
+          }
+
+          return AlertDialog(
+            backgroundColor: const Color(0xFF16162B),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Text('Edit Profile Details', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: emailController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(
+                    labelText: 'Email Address',
+                    labelStyle: TextStyle(color: Colors.white60),
+                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: passcodeController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(
+                    labelText: 'Passcode / Password',
+                    labelStyle: TextStyle(color: Colors.white60),
+                    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6C5CE7),
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: () async {
+                  try {
+                    await supabase.from('profiles').update({
+                      'email': emailController.text.trim(),
+                      'passcode': passcodeController.text.trim(),
+                    }).eq('id', profile.id);
+                    
+                    ref.invalidate(profilesListProvider);
+                    
+                    if (context.mounted) {
+                      Navigator.of(context).pop();
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content: Text('Profile updated successfully!'),
+                      ));
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        backgroundColor: Colors.redAccent,
+                        content: Text('Error: $e'),
+                      ));
+                    }
+                  }
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -1144,9 +1393,15 @@ class DashboardHomeScreen extends HookConsumerWidget {
           decoration: InputDecoration(labelText: tr('new_daily_rate', ref), labelStyle: const TextStyle(color: Colors.white60)),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(tr('cancel', ref))),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(tr('cancel', ref), style: const TextStyle(color: Colors.white54)),
+          ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00CEC9)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00CEC9),
+              foregroundColor: Colors.black,
+            ),
             onPressed: () async {
               final newRate = double.tryParse(controller.text.trim());
               if (newRate != null) {
@@ -1183,9 +1438,15 @@ class DashboardHomeScreen extends HookConsumerWidget {
             onChanged: (v) => setState(() => selected = v),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(tr('cancel', ref))),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(tr('cancel', ref), style: const TextStyle(color: Colors.white54)),
+            ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00CEC9)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00CEC9),
+                foregroundColor: Colors.black,
+              ),
               onPressed: () async {
                 if (selected != null) {
                   try {
@@ -1215,9 +1476,15 @@ class DashboardHomeScreen extends HookConsumerWidget {
         title: Text(tr('delete_vehicle', ref), style: const TextStyle(color: Colors.white)),
         content: Text('${vehicle.brand} ${vehicle.model} — ${tr('remove_permanently', ref)}', style: const TextStyle(color: Colors.white70)),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(tr('cancel', ref))),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(tr('cancel', ref), style: const TextStyle(color: Colors.white54)),
+          ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+            ),
             onPressed: () async {
               try {
                 await ref.read(vehicleRepositoryProvider).deleteVehicle(vehicle.id);
@@ -1367,9 +1634,15 @@ class DashboardHomeScreen extends HookConsumerWidget {
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(tr('cancel', ref))),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text(tr('cancel', ref), style: const TextStyle(color: Colors.white54)),
+              ),
               ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C5CE7)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6C5CE7),
+                  foregroundColor: Colors.white,
+                ),
                 onPressed: () async {
                   if (formKey.currentState!.validate() && selectedVehicle != null) {
                     try {
@@ -1410,6 +1683,7 @@ class DashboardHomeScreen extends HookConsumerWidget {
     final contactController = TextEditingController(text: p.contactName);
     final emailController = TextEditingController(text: p.email);
     final phoneController = TextEditingController(text: p.phone);
+    bool autoConfirmValue = p.autoConfirm;
 
     showDialog(
       context: context,
@@ -1450,6 +1724,22 @@ class DashboardHomeScreen extends HookConsumerWidget {
                     style: const TextStyle(color: Colors.white),
                     decoration: const InputDecoration(labelText: 'Phone / Password', labelStyle: TextStyle(color: Colors.white60)),
                   ),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Auto-Confirm Bookings', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                      Switch(
+                        value: autoConfirmValue,
+                        activeColor: const Color(0xFF00CEC9),
+                        onChanged: (val) {
+                          setState(() {
+                            autoConfirmValue = val;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 20),
                   
                   Container(
@@ -1480,17 +1770,19 @@ class DashboardHomeScreen extends HookConsumerWidget {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text('Expires:', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                            const Text('Expires At:', style: TextStyle(color: Colors.white54, fontSize: 12)),
                             Text(expStr, style: const TextStyle(color: Colors.white70, fontSize: 12)),
                           ],
                         ),
                         const SizedBox(height: 12),
                         SizedBox(
                           width: double.infinity,
-                          height: 36,
                           child: isSubActive
                               ? ElevatedButton(
-                                  style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent.withOpacity(0.2), foregroundColor: Colors.redAccent),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.redAccent.withOpacity(0.2),
+                                    foregroundColor: Colors.redAccent,
+                                  ),
                                   onPressed: () async {
                                     try {
                                       await Supabase.instance.client
@@ -1511,7 +1803,10 @@ class DashboardHomeScreen extends HookConsumerWidget {
                                   child: const Text('Stop Subscription', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                                 )
                               : ElevatedButton(
-                                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green.withOpacity(0.2), foregroundColor: Colors.greenAccent),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.green.withOpacity(0.2),
+                                    foregroundColor: Colors.greenAccent,
+                                  ),
                                   onPressed: () async {
                                     try {
                                       final exp = DateTime.now().add(const Duration(days: 30)).toIso8601String();
@@ -1542,7 +1837,10 @@ class DashboardHomeScreen extends HookConsumerWidget {
             actions: [
               TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel', style: TextStyle(color: Colors.white54))),
               ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C5CE7)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6C5CE7),
+                  foregroundColor: Colors.white,
+                ),
                 onPressed: () async {
                   try {
                     await Supabase.instance.client
@@ -1552,6 +1850,7 @@ class DashboardHomeScreen extends HookConsumerWidget {
                           'contact_name': contactController.text.trim(),
                           'email': emailController.text.trim(),
                           'phone': phoneController.text.trim(),
+                          'auto_confirm': autoConfirmValue,
                         })
                         .eq('id', p.id);
                     ref.invalidate(partnersListProvider);
@@ -1580,6 +1879,7 @@ class DashboardHomeScreen extends HookConsumerWidget {
     final companyController = TextEditingController();
     final contactController = TextEditingController();
     final phoneController = TextEditingController();
+    bool autoConfirmValue = false;
 
     if (isUserAdmin) {
       emailController.text = 'shaban.ejj@gmail.com';
@@ -1588,101 +1888,159 @@ class DashboardHomeScreen extends HookConsumerWidget {
         final res = await supabase.from('profiles').select().eq('role', 'Admin').single();
         emailController.text = res['email'] as String? ?? 'shaban.ejj@gmail.com';
         passcodeController.text = res['passcode'] as String? ?? '2026';
+        autoConfirmValue = res['auto_confirm'] as bool? ?? false;
       } catch (_) {}
     } else {
       companyController.text = partner.companyName;
       contactController.text = partner.contactName;
       emailController.text = partner.email;
       phoneController.text = partner.phone;
+      autoConfirmValue = partner.autoConfirm;
     }
 
     if (!context.mounted) return;
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF16162B),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(isUserAdmin ? 'Admin Profile Settings' : 'Partner Profile Settings', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (isUserAdmin) ...[
-                TextField(
-                  controller: emailController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(labelText: 'Admin Email', labelStyle: TextStyle(color: Colors.white60)),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: passcodeController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(labelText: 'Admin Passcode', labelStyle: TextStyle(color: Colors.white60)),
-                ),
-              ] else ...[
-                TextField(
-                  controller: companyController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(labelText: 'Company Name', labelStyle: TextStyle(color: Colors.white60)),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: contactController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(labelText: 'Contact Name', labelStyle: TextStyle(color: Colors.white60)),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: emailController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(labelText: 'Email Address', labelStyle: TextStyle(color: Colors.white60)),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: phoneController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(labelText: 'Phone / Password', labelStyle: TextStyle(color: Colors.white60)),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          backgroundColor: const Color(0xFF16162B),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(isUserAdmin ? 'Admin Profile Settings' : 'Partner Profile Settings', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isUserAdmin) ...[
+                  TextField(
+                    controller: emailController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: const InputDecoration(labelText: 'Admin Email', labelStyle: TextStyle(color: Colors.white60)),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: passcodeController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: const InputDecoration(labelText: 'Admin Passcode', labelStyle: TextStyle(color: Colors.white60)),
+                  ),
+                ] else ...[
+                  TextField(
+                    controller: companyController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: const InputDecoration(labelText: 'Company Name', labelStyle: TextStyle(color: Colors.white60)),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: contactController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: const InputDecoration(labelText: 'Contact Name', labelStyle: TextStyle(color: Colors.white60)),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: emailController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: const InputDecoration(labelText: 'Email Address', labelStyle: TextStyle(color: Colors.white60)),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: phoneController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: const InputDecoration(labelText: 'Phone / Password', labelStyle: TextStyle(color: Colors.white60)),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Auto-Confirm Bookings', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                    Switch(
+                      value: autoConfirmValue,
+                      activeColor: const Color(0xFF00CEC9),
+                      onChanged: (val) {
+                        setState(() {
+                          autoConfirmValue = val;
+                        });
+                      },
+                    ),
+                  ],
                 ),
               ],
-            ],
+            ),
           ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel', style: TextStyle(color: Colors.white54))),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6C5CE7),
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () async {
+                try {
+                  if (isUserAdmin) {
+                    await supabase.from('profiles').update({
+                      'email': emailController.text.trim(),
+                      'passcode': passcodeController.text.trim(),
+                      'auto_confirm': autoConfirmValue,
+                    }).eq('role', 'Admin');
+                    ref.invalidate(profilesListProvider);
+                    if (context.mounted) {
+                      Navigator.of(context).pop();
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile updated successfully!')));
+                    }
+                  } else {
+                    // Check if changes are made to profile fields
+                    final hasChanges = companyController.text.trim() != partner.companyName ||
+                        contactController.text.trim() != partner.contactName ||
+                        emailController.text.trim() != partner.email ||
+                        phoneController.text.trim() != partner.phone;
+
+                    if (hasChanges) {
+                      final req = ProfileChangeRequest(
+                        id: '',
+                        partnerId: partner.id,
+                        companyName: companyController.text.trim(),
+                        contactName: contactController.text.trim(),
+                        email: emailController.text.trim(),
+                        phone: phoneController.text.trim(),
+                        status: 'Pending',
+                        createdAt: DateTime.now(),
+                      );
+                      await ref.read(partnerRepositoryProvider).submitProfileChangeRequest(req);
+                    }
+
+                    // Update auto_confirm flag directly
+                    final response = await supabase.from('partners').update({
+                      'auto_confirm': autoConfirmValue,
+                    }).eq('id', partner.id).select().single();
+
+                    ref.read(currentPartnerProvider.notifier).state = Partner.fromJson(response);
+                    ref.invalidate(partnersListProvider);
+                    ref.invalidate(profileChangeRequestsListProvider);
+
+                    if (context.mounted) {
+                      Navigator.of(context).pop();
+                      if (hasChanges) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                          backgroundColor: Color(0xFF00CEC9),
+                          content: Text('Settings updated. Profile changes request submitted to Admin for approval.'),
+                        ));
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                          content: Text('Settings updated successfully!'),
+                        ));
+                      }
+                    }
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                  }
+                }
+              },
+              child: const Text('Save'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel', style: TextStyle(color: Colors.white54))),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C5CE7)),
-            onPressed: () async {
-              try {
-                if (isUserAdmin) {
-                  await supabase.from('profiles').update({
-                    'email': emailController.text.trim(),
-                    'passcode': passcodeController.text.trim(),
-                  }).eq('role', 'Admin');
-                  ref.invalidate(profilesListProvider);
-                } else {
-                  final response = await supabase.from('partners').update({
-                    'company_name': companyController.text.trim(),
-                    'contact_name': contactController.text.trim(),
-                    'email': emailController.text.trim(),
-                    'phone': phoneController.text.trim(),
-                  }).eq('id', partner.id).select().single();
-                  ref.read(currentPartnerProvider.notifier).state = Partner.fromJson(response);
-                  ref.invalidate(partnersListProvider);
-                }
-                if (context.mounted) {
-                  Navigator.of(context).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile updated successfully!')));
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-                }
-              }
-            },
-            child: const Text('Save'),
-          ),
-        ],
       ),
     );
   }

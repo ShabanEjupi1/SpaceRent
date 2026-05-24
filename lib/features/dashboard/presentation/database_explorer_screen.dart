@@ -9,7 +9,7 @@ class DatabaseExplorerScreen extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final supabase = ref.watch(supabaseClientProvider);
-    final sqlController = useTextEditingController(text: 'SELECT * FROM vehicles LIMIT 10;');
+    final sqlController = useTextEditingController(text: 'SELECT * FROM vehicles LIMIT 10');
     final isExecuting = useState(false);
     final results = useState<List<Map<String, dynamic>>?>(null);
     final successMessage = useState<String?>(null);
@@ -18,12 +18,12 @@ class DatabaseExplorerScreen extends HookConsumerWidget {
 
     // Query templates
     final templates = [
-      {'label': 'Fetch Vehicles', 'sql': 'SELECT * FROM vehicles ORDER BY created_at DESC LIMIT 10;'},
-      {'label': 'Fetch Bookings', 'sql': 'SELECT * FROM bookings ORDER BY created_at DESC LIMIT 10;'},
-      {'label': 'Fetch Partners', 'sql': 'SELECT * FROM partners ORDER BY created_at DESC LIMIT 10;'},
-      {'label': 'Fetch Profiles', 'sql': 'SELECT * FROM profiles LIMIT 10;'},
-      {'label': 'Fetch Payments', 'sql': 'SELECT * FROM payments ORDER BY created_at DESC LIMIT 10;'},
-      {'label': 'Add Custom Column example', 'sql': 'ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS test_badge VARCHAR(50);'},
+      {'label': 'Fetch Vehicles', 'sql': 'SELECT * FROM vehicles ORDER BY created_at DESC LIMIT 10'},
+      {'label': 'Fetch Bookings', 'sql': 'SELECT * FROM bookings ORDER BY created_at DESC LIMIT 10'},
+      {'label': 'Fetch Partners', 'sql': 'SELECT * FROM partners ORDER BY created_at DESC LIMIT 10'},
+      {'label': 'Fetch Profiles', 'sql': 'SELECT * FROM profiles LIMIT 10'},
+      {'label': 'Fetch Payments', 'sql': 'SELECT * FROM payments ORDER BY created_at DESC LIMIT 10'},
+      {'label': 'Add Custom Column example', 'sql': 'ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS test_badge VARCHAR(50)'},
     ];
 
     Future<void> runQuery() async {

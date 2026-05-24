@@ -22,11 +22,11 @@ final vehicleRepositoryProvider =
 );
 
 typedef VehicleRepositoryRef = AutoDisposeProviderRef<VehicleRepository>;
-String _$locationsHash() => r'16ce251b355405107897fc7d484fc470f1e45c28';
+String _$locationsHash() => r'5c320123d0befcbd9322507c48af919972f7aac8';
 
 /// See also [locations].
 @ProviderFor(locations)
-final locationsProvider = AutoDisposeFutureProvider<List<Location>>.internal(
+final locationsProvider = FutureProvider<List<Location>>.internal(
   locations,
   name: r'locationsProvider',
   debugGetCreateSourceHash:
@@ -35,8 +35,8 @@ final locationsProvider = AutoDisposeFutureProvider<List<Location>>.internal(
   allTransitiveDependencies: null,
 );
 
-typedef LocationsRef = AutoDisposeFutureProviderRef<List<Location>>;
-String _$vehiclesListHash() => r'e8722c7e8022b175b5f99edf8c005fde3b13967c';
+typedef LocationsRef = FutureProviderRef<List<Location>>;
+String _$vehiclesListHash() => r'540139f277a4a0e499e3ef31317084857765f664';
 
 /// Copied from Dart SDK
 class _SystemHash {
@@ -102,7 +102,7 @@ class VehiclesListFamily extends Family<AsyncValue<List<Vehicle>>> {
 }
 
 /// See also [vehiclesList].
-class VehiclesListProvider extends AutoDisposeFutureProvider<List<Vehicle>> {
+class VehiclesListProvider extends FutureProvider<List<Vehicle>> {
   /// See also [vehiclesList].
   VehiclesListProvider({
     String? locationId,
@@ -154,7 +154,7 @@ class VehiclesListProvider extends AutoDisposeFutureProvider<List<Vehicle>> {
   }
 
   @override
-  AutoDisposeFutureProviderElement<List<Vehicle>> createElement() {
+  FutureProviderElement<List<Vehicle>> createElement() {
     return _VehiclesListProviderElement(this);
   }
 
@@ -172,13 +172,12 @@ class VehiclesListProvider extends AutoDisposeFutureProvider<List<Vehicle>> {
   }
 }
 
-mixin VehiclesListRef on AutoDisposeFutureProviderRef<List<Vehicle>> {
+mixin VehiclesListRef on FutureProviderRef<List<Vehicle>> {
   /// The parameter `locationId` of this provider.
   String? get locationId;
 }
 
-class _VehiclesListProviderElement
-    extends AutoDisposeFutureProviderElement<List<Vehicle>>
+class _VehiclesListProviderElement extends FutureProviderElement<List<Vehicle>>
     with VehiclesListRef {
   _VehiclesListProviderElement(super.provider);
 

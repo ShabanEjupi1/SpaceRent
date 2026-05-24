@@ -51,3 +51,25 @@ CREATE POLICY "Public Update Access" ON storage.objects FOR UPDATE USING (bucket
 
 DROP POLICY IF EXISTS "Public Delete Access" ON storage.objects;
 CREATE POLICY "Public Delete Access" ON storage.objects FOR DELETE USING (bucket_id = 'vehicle-images');
+
+-- 6. Add auto_confirm settings to partners and profiles
+ALTER TABLE partners ADD COLUMN IF NOT EXISTS auto_confirm BOOLEAN DEFAULT FALSE;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS auto_confirm BOOLEAN DEFAULT FALSE;
+
+-- 7. Create profile change requests table for partners
+CREATE TABLE IF NOT EXISTS profile_change_requests (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    partner_id UUID REFERENCES partners(id) ON DELETE CASCADE,
+    company_name VARCHAR(255),
+    contact_name VARCHAR(255),
+    email VARCHAR(255),
+    phone VARCHAR(255),
+    status VARCHAR(50) DEFAULT 'Pending' NOT NULL, -- 'Pending', 'Approved', 'Rejected'
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+-- Enable RLS and add public access policies for profile_change_requests
+ALTER TABLE profile_change_requests ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow public access to profile_change_requests" ON profile_change_requests;
+CREATE POLICY "Allow public access to profile_change_requests" ON profile_change_requests FOR ALL USING (true);
